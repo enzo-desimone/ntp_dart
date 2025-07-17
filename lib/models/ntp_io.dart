@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+
 /// A simple NTP client for fetching the current UTC time from an NTP server.
 class NtpClient {
   /// NTP server hostname or IP address.
