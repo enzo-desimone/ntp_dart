@@ -5,7 +5,6 @@ NTP Dart is a lightweight Dart/Flutter plugin that synchronizes your app’s clo
 [![Pub Version](https://img.shields.io/pub/v/ntp_dart?style=flat-square&logo=dart)](https://pub.dev/packages/ntp_dart)
 ![Pub Likes](https://img.shields.io/pub/likes/ntp_dart)
 ![Pub Likes](https://img.shields.io/pub/points/ntp_dart)
-![Pub Likes](https://img.shields.io/pub/popularity/ntp_dart)
 ![GitHub license](https://img.shields.io/github/license/enzo-desimone/check_app_version?style=flat-square)
 
 
