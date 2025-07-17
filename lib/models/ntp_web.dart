@@ -26,7 +26,7 @@ class NtpClient {
   /// resulting [DateTime] in UTC.
   ///
   /// Throws an [Exception] if parsing fails.
-   Future<DateTime> now() async {
+  Future<DateTime> now() async {
     final uri = Uri.parse(_api);
     final response = await http.get(uri);
 
@@ -38,13 +38,11 @@ class NtpClient {
 
     try {
       final String stringDate = response.body;
-      final DateFormat format = DateFormat(
-          "EEE, dd MMM yyyy HH:mm:ss 'GMT'", 'en_US'
-      );
+      final DateFormat format =
+          DateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", 'en_US');
       return format.parseUTC(stringDate);
     } catch (e) {
       throw Exception('Error parsing time from API: \$e');
     }
   }
 }
-

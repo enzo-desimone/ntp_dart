@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:ntp_dart/ntp_dart.dart';
 
 /// A static class to manage accurate UTC time using HTTP synchronization and local caching.
@@ -13,7 +14,7 @@ class AccurateTime {
   static Duration syncInterval = const Duration(minutes: 60);
 
   /// NTP client instance (customizable if needed)
-  static NtpClient ntpClient = NtpClient();
+  static NtpClient _ntpClient = NtpClient();
 
   /// Returns the current accurate UTC time.
   ///
@@ -40,7 +41,7 @@ class AccurateTime {
   /// If the request fails, the cached time will not be updated.
   static Future<void> _syncNtpTime() async {
     try {
-      final ntpTime = await ntpClient.now();
+      final ntpTime = await _ntpClient.now();
       _lastNtpSync = DateTime.now();
       _cachedUtcTime = ntpTime;
     } catch (e) {
