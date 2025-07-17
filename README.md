@@ -77,4 +77,4 @@ Contributions welcome! Open an [issue](https://github.com/enzo-desimone/ntp_dart
 
 ## 📃 License
 
-Released under MIT. See [LICENSE](https://github.com/enzo-desimone/ntp_dart/blob/main/LICENSE).
+Released under MIT. See [LICENSE](https://github.com/enzo-desimone/ntp_dart/blob/master/LICENSE).
