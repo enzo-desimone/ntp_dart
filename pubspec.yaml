@@ -1,6 +1,6 @@
 name: ntp_dart
 description: Lightweight Dart package to fetch accurate UTC time from NTP servers with no external dependencies.
-version: 1.0.0
+version: 1.0.1
 homepage: https://github.com/enzo-desimone/ntp_dart
 
 environment:
