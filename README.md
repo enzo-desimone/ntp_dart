@@ -1,79 +1,120 @@
 # NTP Dart
 
-NTP Dart is a lightweight Dart/Flutter plugin that synchronizes your app’s clock with an NTP server or HTTP endpoint, providing accurate UTC `DateTime` for authentication, logging and other time‑sensitive operations.
+**NTP Dart** is a lightweight and cross-platform Dart/Flutter plugin that keeps your app’s clock in sync using NTP servers (on mobile/desktop) or HTTP time endpoints (on web). It provides accurate UTC `DateTime` values for authentication, logging, and time-sensitive logic.
 
 [![Pub Version](https://img.shields.io/pub/v/ntp_dart?style=flat-square&logo=dart)](https://pub.dev/packages/ntp_dart)
 ![Pub Likes](https://img.shields.io/pub/likes/ntp_dart)
-![Pub Likes](https://img.shields.io/pub/points/ntp_dart)
+![Pub Points](https://img.shields.io/pub/points/ntp_dart)
 ![GitHub license](https://img.shields.io/github/license/enzo-desimone/ntp_dart?style=flat-square)
 
+---
 
 ## 📱 Supported Platforms
 
-| Android | iOS | MacOS | Web | Linux | Windows |
+| Android | iOS | macOS | Web | Linux | Windows |
 |:-------:|:---:|:-----:|:---:|:-----:|:-------:|
-|    ✔️   |  ✔️  |   ✔️  |  ✔️  |   ✔️  |    ✔️   |
+|   ✔️    | ✔️   |  ✔️   | ✔️   |  ✔️   |   ✔️    |
+
+---
 
 ## 🔍 Overview
 
-NTP Dart fetches precise UTC time from NTP servers on mobile/desktop and HTTP endpoints on Web (e.g. `postman-echo.com/time/now`), ensuring your application clock remains synchronized for authentication, token verification, logging, and other time‑critical workflows.
+`ntp_dart` ensures your app maintains **accurate UTC time** across platforms.
+
+- On **mobile/desktop**, it uses NTP protocol (UDP).
+- On **web**, it uses HTTP to fetch time from a JSON endpoint like `https://worldtimeapi.org/api/timezone/etc/utc`.
+
+This is crucial for:
+- Secure token verification
+- Time-based triggers
+- Audit logs
+- UI clocks and timers
+
+---
 
 ## ⚙️ Installation
 
-Add the package to your `pubspec.yaml`:
+Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
   ntp_dart: ^1.0.0
 ```
 
-Then run:
+Then install:
 
 ```bash
 flutter pub get
 ```
 
-Import in your Dart code:
+Import it:
 
 ```dart
 import 'package:ntp_dart/ntp_client.dart';
 import 'package:ntp_dart/accurate_time.dart';
 ```
 
+---
+
 ## 🔧 Usage
 
-### Basic Usage
+### 📡 Direct Fetch (No Caching)
 
-Initialize and fetch server time on every call:
+Fetch fresh UTC time from the server every time:
 
 ```dart
-final nowUtc = await NtpClient.fetchServerTime();
-print(nowUtc.toIso8601String());
+final nowUtc = await NtpClient.now();
 ```
 
-### Cached Usage with Sync Interval
+---
 
-Use `AccurateTime.now()` to leverage in‑memory caching and control how often a fresh time is fetched. By default it caches the last value, and you can specify a `syncInterval` to force resynchronization (default 60 muinutes of duration):
+### 🧠 Cached Fetch with Sync Interval
+
+Use `AccurateTime.now()` to avoid redundant requests and auto-sync periodically (default: every 60 minutes):
 
 ```dart
 final nowUtc = await AccurateTime.now();
-print(nowUtc.toIso8601String());
 ```
 
-On mobile/desktop, `AccurateTime.now()` uses NTP under the hood; on Web it falls back to the HTTP endpoint, avoiding unnecessary network calls within the `syncInterval`.
+You can customize the interval:
+
+```dart
+AccurateTime.setSyncInterval(Duration(minutes: 30));
+```
+
+On **web**, `AccurateTime` fetches time from a JSON endpoint (default: `https://worldtimeapi.org/...`) and caches it for the given interval.
+
+---
+
+## 📘 API Reference
+
+| Method | Description |
+|--------|-------------|
+| `NtpClient({ String server = 'pool.ntp.org', int port = 123, int timeout = 5 })` | Constructor. Creates a new NTP client (non-Web only). |
+| `Future<DateTime> NtpClient().now()` | Fetches fresh UTC time from the specified NTP server. |
+| `Future<DateTime> AccurateTime.now()` | Returns cached UTC time or resynchronizes if the sync interval has expired. |
+| `void AccurateTime.setSyncInterval(Duration duration)` | Sets how often a new time sync should occur. Default: 60 minutes. |
+
+
+---
 
 ## 💡 Common Use Cases
 
-* **Accurate authentication**: Ensure JWT/Token verifications use precise UTC timestamps.
-* **Consistent logging**: Normalize log entries across platforms with synchronized time.
-* **Scheduled tasks**: Trigger time‑based actions (like daily notifications) reliably.
-* **Data synchronization**: Coordinate data fetches/releases based on exact timestamps.
-* **UI clocks**: Display a real‑time clock or countdown timer that stays in sync.
+- ✅ **Token validation** using accurate UTC for Firebase JWTs — see [firebase_verify_token_dart](https://pub.dev/packages/firebase_verify_token_dart)
+- 🕒 **Cross-platform logging** with consistent time
+- 🔔 **Scheduled actions** (notifications, tasks, resets)
+- 🔄 **Time-coordinated data sync**
+- 🧭 **UI clocks** that stay accurate over time
+
+---
 
 ## 🤝 Contributing
 
-Contributions welcome! Open an [issue](https://github.com/enzo-desimone/ntp_dart/issues) or submit a [pull request](https://github.com/enzo-desimone/ntp_dart/pulls).
+Have feedback or a fix?  
+Open an [issue](https://github.com/enzo-desimone/ntp_dart/issues) or submit a [pull request](https://github.com/enzo-desimone/ntp_dart/pulls).
+
+---
 
 ## 📃 License
 
-Released under MIT. See [LICENSE](https://github.com/enzo-desimone/ntp_dart/blob/master/LICENSE).
+MIT License. See [LICENSE](https://github.com/enzo-desimone/ntp_dart/blob/master/LICENSE).

@@ -11,7 +11,7 @@ class AccurateTime {
   static DateTime? _lastNtpSync;
 
   /// The interval at which the time should be resynchronized.
-  static Duration syncInterval = const Duration(minutes: 60);
+  static Duration _syncInterval = const Duration(minutes: 60);
 
   /// NTP client instance (customizable if needed)
   static NtpClient _ntpClient = NtpClient();
@@ -23,7 +23,7 @@ class AccurateTime {
   static Future<DateTime> now() async {
     if (_cachedUtcTime == null ||
         _lastNtpSync == null ||
-        DateTime.now().difference(_lastNtpSync!) > syncInterval) {
+        DateTime.now().difference(_lastNtpSync!) > _syncInterval) {
       await _syncNtpTime();
     }
 
@@ -51,6 +51,6 @@ class AccurateTime {
 
   /// Updates the duration used to determine when to resync the time.
   static void setSyncInterval(Duration newInterval) {
-    syncInterval = newInterval;
+    _syncInterval = newInterval;
   }
 }
