@@ -63,7 +63,7 @@ import 'package:ntp_dart/accurate_time.dart';
 Fetch fresh UTC time from the server every time:
 
 ```dart
-final nowUtc = await NtpClient.now();
+final nowUtc = await NtpClient().now();
 ```
 
 ---
