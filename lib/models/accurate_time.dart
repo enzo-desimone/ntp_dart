@@ -14,20 +14,24 @@ class AccurateTime {
   static Duration _syncInterval = const Duration(minutes: 60);
 
   /// NTP client instance (customizable if needed)
-  static NtpClient _ntpClient = NtpClient();
+  static final NtpClient _ntpClient = NtpClient();
 
   /// Returns the current accurate UTC time.
   ///
   /// If the cached time is outdated or not initialized, it fetches the time
-  /// from an NTP server. Then it adjusts based on local time drift.
+  /// from an NTP server and adjusts the result based on local time drift.
+  ///
+  /// Returns a [DateTime] in UTC.
   static Future<DateTime> now() async {
+    var now = DateTime.now();
     if (_cachedUtcTime == null ||
         _lastNtpSync == null ||
-        DateTime.now().difference(_lastNtpSync!) > _syncInterval) {
+        now.difference(_lastNtpSync!) > _syncInterval) {
       await _syncNtpTime();
+      now = DateTime.now();
     }
 
-    final timeDifference = DateTime.now().difference(_lastNtpSync!);
+    final timeDifference = now.difference(_lastNtpSync!);
     return _cachedUtcTime!.add(timeDifference);
   }
 
@@ -50,6 +54,9 @@ class AccurateTime {
   }
 
   /// Updates the duration used to determine when to resync the time.
+  ///
+  /// The [newInterval] defines the maximum age of the cached time before a
+  /// new synchronization is triggered.
   static void setSyncInterval(Duration newInterval) {
     _syncInterval = newInterval;
   }

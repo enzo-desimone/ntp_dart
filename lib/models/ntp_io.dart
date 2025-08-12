@@ -13,6 +13,12 @@ class NtpClient {
   /// Timeout in seconds for the network request.
   final int timeout;
 
+  InternetAddress? _cachedAddress;
+
+  /// Creates an [NtpClient] instance.
+  ///
+  /// The [server] defaults to `pool.ntp.org`, [port] to `123` and
+  /// [timeout] to `5` seconds.
   NtpClient({
     this.server = 'pool.ntp.org',
     this.port = 123,
@@ -20,6 +26,9 @@ class NtpClient {
   });
 
   /// Returns the current UTC [DateTime] as provided by the NTP server.
+  ///
+  /// Throws an [Exception] if the server cannot be reached or does not
+  /// respond within [timeout] seconds.
   Future<DateTime> now() async {
     final socket = await _createSocket();
     final ntpAddress = await _resolveServerAddress();
@@ -27,22 +36,20 @@ class NtpClient {
     final packet = _buildNtpPacket();
     socket.send(packet, ntpAddress, port);
 
-    final completer = Completer<DateTime>();
-
-    socket.listen((RawSocketEvent event) {
-      if (event == RawSocketEvent.read) {
-        final datagram = socket.receive();
-        if (datagram == null) return;
-        final dateTime = _parseNtpResponse(datagram.data);
-        completer.complete(dateTime);
-        socket.close();
+    try {
+      await socket
+          .timeout(Duration(seconds: timeout))
+          .firstWhere((event) => event == RawSocketEvent.read);
+      final datagram = socket.receive();
+      if (datagram == null) {
+        throw Exception('No response received from the NTP server');
       }
-    });
-
-    return completer.future.timeout(Duration(seconds: timeout), onTimeout: () {
-      socket.close();
+      return _parseNtpResponse(datagram.data);
+    } on TimeoutException {
       throw Exception('Timeout while contacting the NTP server');
-    });
+    } finally {
+      socket.close();
+    }
   }
 
   /// Opens a UDP socket for communication.
@@ -52,11 +59,13 @@ class NtpClient {
 
   /// Resolves the NTP server hostname to an [InternetAddress].
   Future<InternetAddress> _resolveServerAddress() async {
+    final cached = _cachedAddress;
+    if (cached != null) return cached;
     final addresses = await InternetAddress.lookup(server);
     if (addresses.isEmpty) {
       throw Exception('Unable to resolve NTP server address');
     }
-    return addresses.first;
+    return _cachedAddress = addresses.first;
   }
 
   /// Builds a 48-byte NTP request packet.

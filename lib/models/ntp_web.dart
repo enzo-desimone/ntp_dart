@@ -17,6 +17,7 @@ class NtpClient {
 
   /// Fetches the current server time.
   ///
+  /// Returns the time provided by the remote service as a [DateTime] in UTC.
   /// Sends an HTTP GET request to the configured API endpoint.
   /// If the response status code is not 200, throws an [Exception]
   /// indicating the HTTP error.
