@@ -50,7 +50,7 @@ flutter pub get
 Import it:
 
 ```dart
-import 'package:ntp_dart/ntp_client.dart';
+import 'package:ntp_dart/ntp_base_part.dart';
 import 'package:ntp_dart/accurate_time.dart';
 ```
 

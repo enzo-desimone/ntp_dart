@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:ntp_dart/ntp_dart.dart';
+import 'models.dart';
 
 /// A static class to manage accurate UTC time using HTTP synchronization and local caching.
 class AccurateTime {
