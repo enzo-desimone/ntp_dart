@@ -1,4 +1,7 @@
-part of ntp_impl;
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+
+import 'ntp_base.dart';
 
 /// A web-based implementation of an NTP (Network Time Protocol) client.
 ///

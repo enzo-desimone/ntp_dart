@@ -1,5 +1,3 @@
-part of ntp_impl;
-
 /// Base class for platform-specific NTP (Network Time Protocol) clients.
 ///
 /// This abstract class defines the common configuration parameters and
@@ -7,8 +5,7 @@ part of ntp_impl;
 /// Concrete implementations (e.g., for mobile/desktop using UDP sockets,
 /// or for web using HTTP APIs) should extend this class and provide the
 /// platform-specific logic in the [now] method.
-
-sealed class NtpBase {
+abstract class NtpBase {
   /// The hostname or IP address of the NTP server to query.
   ///
   /// Defaults to `'pool.ntp.org'`, which is a publicly accessible NTP pool.

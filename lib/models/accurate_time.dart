@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'models.dart';
+import 'libraries/libraries.dart';
 
 /// A static class to manage accurate UTC time using HTTP synchronization and local caching.
 class AccurateTime {

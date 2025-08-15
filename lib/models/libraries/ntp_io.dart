@@ -1,4 +1,8 @@
-part of ntp_impl;
+import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'ntp_base.dart';
 
 /// A socket-based implementation of an NTP (Network Time Protocol) client.
 ///
