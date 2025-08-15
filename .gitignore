@@ -18,7 +18,6 @@
 *.iws
 .idea/
 .idea
-.pubignore
 ntp_dart.iml
 pubspec.lock
 
