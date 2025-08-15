@@ -17,6 +17,10 @@
 *.ipr
 *.iws
 .idea/
+.idea
+.pubignore
+ntp_dart.iml
+pubspec.lock
 
 # Visual Studio Code related
 .vscode/
