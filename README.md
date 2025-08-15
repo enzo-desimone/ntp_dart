@@ -81,6 +81,12 @@ You can customize the interval:
 ```dart
 AccurateTime.setSyncInterval(Duration(minutes: 30));
 ```
+Need a synchronous value (e.g., for UI updates)? Use `AccurateTime.nowSync()`. It returns the cached UTC time immediately and
+triggers a background sync if the cache is missing or stale:
+
+```dart
+final nowUtc = AccurateTime.nowSync();
+```
 
 On **web**, `AccurateTime` fetches time from a JSON endpoint (default: `https://worldtimeapi.org/...`) and caches it for the given interval.
 
@@ -93,6 +99,7 @@ On **web**, `AccurateTime` fetches time from a JSON endpoint (default: `https://
 | `NtpClient({ String server = 'pool.ntp.org', int port = 123, int timeout = 5 })` | Constructor. Creates a new NTP client (non-Web only). |
 | `Future<DateTime> NtpClient().now()` | Fetches fresh UTC time from the specified NTP server. |
 | `Future<DateTime> AccurateTime.now()` | Returns cached UTC time or resynchronizes if the sync interval has expired. |
+| `DateTime AccurateTime.nowSync()` | Returns cached UTC time synchronously and triggers a background sync if needed. |
 | `void AccurateTime.setSyncInterval(Duration duration)` | Sets how often a new time sync should occur. Default: 60 minutes. |
 
 

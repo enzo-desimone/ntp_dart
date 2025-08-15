@@ -31,6 +31,28 @@ class AccurateTime {
     return _cachedUtcTime!.add(timeDifference);
   }
 
+  /// Returns the current accurate UTC time synchronously.
+  ///
+  /// If the cache has not been initialized yet, it triggers an asynchronous
+  /// synchronization and returns the local system time converted to UTC. When
+  /// the cache is available, it computes the accurate time using the cached
+  /// value. If the cached value is older than the configured sync interval, a
+  /// background resynchronization is triggered while still returning the
+  /// computed time.
+  static DateTime nowSync() {
+    if (_cachedUtcTime == null || _lastNtpSync == null) {
+      unawaited(_syncNtpTime());
+      return DateTime.now().toUtc();
+    }
+
+    final timeDifference = DateTime.now().difference(_lastNtpSync!);
+    if (timeDifference > _syncInterval) {
+      unawaited(_syncNtpTime());
+    }
+
+    return _cachedUtcTime!.add(timeDifference);
+  }
+
   /// Returns the current accurate UTC time as an ISO 8601 string.
   static Future<String> nowToIsoString() async {
     return (await now()).toIso8601String();

@@ -5,6 +5,7 @@ void main() async {
   AccurateTime.setSyncInterval(Duration(seconds: 5));
 
   print('LOCAL SYSTEM TIME: ${DateTime.now().toUtc()}');
+  print('INITIAL SYNC TIME: ${AccurateTime.nowSync()}');
   print('----------------------------------------------------');
 
   // Fetch the current UTC time directly from the NTP server.
