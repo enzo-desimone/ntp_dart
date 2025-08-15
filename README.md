@@ -1,7 +1,7 @@
 # NTP Dart
 
 <p align="left">
-  <img src="https://raw.githubusercontent.com/enzo-desimone/ntp_dart/master/ntp_dart.png" alt="NTP Dart" width="50%" />
+  <img src="https://raw.githubusercontent.com/enzo-desimone/ntp_dart/master/example/ntp_dart.png" alt="NTP Dart" width="50%" />
 </p>
 
 
