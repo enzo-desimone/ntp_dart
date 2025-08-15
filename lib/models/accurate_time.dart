@@ -54,9 +54,8 @@ class AccurateTime {
   }
 
   /// Returns the current accurate UTC time as an ISO 8601 string.
-  static Future<String> nowToIsoString() async {
-    return (await now()).toIso8601String();
-  }
+  static Future<String> nowToIsoString() =>
+      now().then((time) => time.toIso8601String());
 
   /// Fetches the current UTC time from the NTP server and updates the cache.
   ///
@@ -67,11 +66,16 @@ class AccurateTime {
       _lastNtpSync = DateTime.now();
       _cachedUtcTime = ntpTime;
     } catch (e) {
-      _cachedUtcTime = DateTime.now().toUtc();
+      final fallback = DateTime.now();
+      _lastNtpSync = fallback;
+      _cachedUtcTime = fallback.toUtc();
     }
   }
 
   /// Updates the duration used to determine when to resync the time.
+  ///
+  /// [newInterval] specifies the minimum duration between consecutive
+  /// synchronizations.
   static void setSyncInterval(Duration newInterval) {
     _syncInterval = newInterval;
   }
