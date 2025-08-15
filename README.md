@@ -1,8 +1,9 @@
 # NTP Dart
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/enzo-desimone/ntp_dart/master/assets/ntp_dart_banner.jpeg" alt="NTP Dart" width="100%">
+<p align="left">
+  <img src="https://raw.githubusercontent.com/enzo-desimone/ntp_dart/master/ntp_dart.png" alt="NTP Dart" width="50%" />
 </p>
+
 
 
 **NTP Dart** is a lightweight and cross-platform Dart/Flutter plugin that keeps your app’s clock in sync using NTP servers (on mobile/desktop) or HTTP time endpoints (on web). It provides accurate UTC `DateTime` values for authentication, logging, and time-sensitive logic.
