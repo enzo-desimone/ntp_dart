@@ -1,141 +1,145 @@
-# NTP Dart
+# 🌐 NTP Dart
 
-<p align="left">
-  <img src="https://raw.githubusercontent.com/enzo-desimone/ntp_dart/master/example/ntp_dart.webp" alt="NTP Dart" width="50%" />
-</p>
+<div align="center">
 
+<img src="https://raw.githubusercontent.com/enzo-desimone/ntp_dart/master/example/ntp_dart.webp" alt="NTP Dart" width="400" style="border-radius: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
 
+**The Reliable Cross-Platform Time Synchronization Plugin for Flutter & Dart**
 
-**NTP Dart** is a lightweight and cross-platform Dart/Flutter plugin that keeps your app’s clock in sync using NTP servers (on mobile/desktop) or HTTP time endpoints (on web). It provides accurate UTC `DateTime` values for authentication, logging, and time-sensitive logic.
+[![Pub Version](https://img.shields.io/pub/v/ntp_dart?style=flat-square&logo=dart&color=0175C2)](https://pub.dev/packages/ntp_dart)
+[![Pub Likes](https://img.shields.io/pub/likes/ntp_dart?style=flat-square&logo=flutter&color=02569B)](https://pub.dev/packages/ntp_dart)
+[![Pub Points](https://img.shields.io/pub/points/ntp_dart?style=flat-square&logo=dart&color=0175C2)](https://pub.dev/packages/ntp_dart)
+[![License](https://img.shields.io/github/license/enzo-desimone/ntp_dart?style=flat-square&color=blue)](https://github.com/enzo-desimone/ntp_dart/blob/master/LICENSE)
 
-[![Pub Version](https://img.shields.io/pub/v/ntp_dart?style=flat-square&logo=dart)](https://pub.dev/packages/ntp_dart)
-![Pub Likes](https://img.shields.io/pub/likes/ntp_dart)
-![Pub Points](https://img.shields.io/pub/points/ntp_dart)
-![GitHub license](https://img.shields.io/github/license/enzo-desimone/ntp_dart?style=flat-square)
-
----
-
-## 📱 Supported Platforms
-
-| Android | iOS | macOS | Web | Linux | Windows |
-|:-------:|:---:|:-----:|:---:|:-----:|:-------:|
-|   ✔️    | ✔️   |  ✔️   | ✔️   |  ✔️   |   ✔️    |
+</div>
 
 ---
 
-## 🔍 Overview
+**NTP Dart** guarantees your application has access to **accurate UTC time**, regardless of valid local device settings. It seamlessly handles both cross-platform differences and network conditions to deliver reliable time data.
 
-`ntp_dart` ensures your app maintains **accurate UTC time** across platforms.
+### 🚀 Why choose ntp_dart?
 
-- On **mobile/desktop**, it uses NTP protocol (UDP) with millisecond precision and latency compensation.
-- On **web**, it uses HTTP to fetch time from a JSON endpoint (defaults to Postman Echo) and applies latency compensation.
-
-This is crucial for:
-- Secure token verification
-- Time-based triggers
-- Audit logs
-- UI clocks and timers
+- **🛠 Cross-Platform:** Native UDP NTP on **Mobile/Desktop**, HTTP on **Web**.
+- **⚡ Accurate:** Millisecond precision with **Latency Compensation**.
+- **🔋 Efficient:** Built-in caching with `AccurateTime` to minimize network requests.
+- **🌍 Flexible:** Configurable servers, custom Web APIs (e.g., WorldTimeAPI), and sync intervals.
 
 ---
 
-## ⚙️ Installation
+## 📱 Platform Support
 
-Add to your `pubspec.yaml`:
+| Feature | Android | iOS | macOS | Windows | Linux | Web |
+|:-------:|:-------:|:---:|:-----:|:-------:|:-----:|:---:|
+| **Support** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+---
+
+## 📦 Installation
+
+Add the dependency to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
   ntp_dart: ^1.2.0
 ```
 
-Then install:
-
+Run installation:
 ```bash
 flutter pub get
 ```
 
-Import it:
-
+Import in your project:
 ```dart
-import 'package:ntp_dart/ntp_base.dart';
-import 'package:ntp_dart/accurate_time.dart';
+import 'package:ntp_dart/ntp_dart.dart';
 ```
 
 ---
 
-## 🔧 Usage
+## 🛠 Usage
 
-### 📡 Direct Fetch (No Caching)
-
-Fetch fresh UTC time from the server every time:
+### 1️⃣ Direct Network Fetch
+Get the current time directly from the server. Ideal for one-off checks.
 
 ```dart
-// Default NTP sync (pool.ntp.org on mobile, postman-echo on web)
-final nowUtc = await NtpClient().now();
+// Standard NTP fetch (pool.ntp.org)
+final DateTime now = await NtpClient().now();
+```
 
-// Custom Web API endpoint and parsing logic
+#### 🌐 Web Specific Configuration
+On Web, you can customize the API endpoint and parsing logic (e.g., using **WorldTimeAPI**).
+
+```dart
 final customWebTime = await NtpClient(
+  // Custom API Endpoint
   apiUrl: 'https://worldtimeapi.org/api/timezone/Etc/UTC',
+  // Custom Response Parser
   parseResponse: (response) {
-    final json = jsonDecode(response.body);
-    return DateTime.parse(json['utc_datetime']);
+    return DateTime.parse(jsonDecode(response.body)['utc_datetime']);
   },
 ).now();
 ```
 
 ---
 
-### 🧠 Cached Fetch with Sync Interval
+### 2️⃣ Synchronized & Cached Time (Recommended)
+Use `AccurateTime` to maintain a synced clock without spamming network requests. It automatically re-syncs based on your interval.
 
-Use `AccurateTime.now()` to avoid redundant requests and auto-sync periodically (default: every 60 minutes):
-
+**Async (Checks cache, syncs if needed):**
 ```dart
-final nowUtc = await AccurateTime.now();
+final DateTime now = await AccurateTime.now();
 ```
 
-You can customize the interval:
-
+**Sync (Returns cache immediately, syncs in background):**
 ```dart
-AccurateTime.setSyncInterval(Duration(minutes: 30));
+final DateTime now = AccurateTime.nowSync();
 ```
-Need a synchronous value (e.g., for UI updates)? Use `AccurateTime.nowSync()`. It returns the cached UTC time immediately and
-triggers a background sync if the cache is missing or stale:
 
+**Configure Sync Interval (Default: 60 mins):**
 ```dart
-final nowUtc = AccurateTime.nowSync();
+AccurateTime.setSyncInterval(Duration(minutes: 15));
 ```
 
 ---
 
 ## 📘 API Reference
 
-| Method | Description |
-|--------|-------------|
-| `NtpClient({ String server = 'pool.ntp.org', int port = 123, int timeout = 5, String? apiUrl, Function? parseResponse })` | Constructor. Create client with optional custom settings. `apiUrl` and `parseResponse` are Web-only. |
-| `Future<DateTime> NtpClient().now()` | Fetches fresh UTC time. Applies latency compensation. |
-| `Future<DateTime> AccurateTime.now()` | Returns cached UTC time or resynchronizes if the sync interval has expired. |
-| `DateTime AccurateTime.nowSync()` | Returns cached UTC time synchronously and triggers a background sync if needed. |
-| `void AccurateTime.setSyncInterval(Duration duration)` | Sets how often a new time sync should occur. Default: 60 minutes. |
+### `NtpClient`
+The core client for fetching time.
 
+| Parameter | Type | Description | Default |
+|:----------|:-----|:------------|:--------|
+| `server` | `String` | NTP Server URL (Mobile/Desktop) | `'pool.ntp.org'` |
+| `port` | `int` | NTP Port (Mobile/Desktop) | `123` |
+| `timeout` | `int` | Request timeout in seconds | `5` |
+| `apiUrl` | `String?` | Time API URL (**Web Only**) | `null` (uses internal) |
+| `parseResponse`| `Function?` | Parser callback (**Web Only**) | `null` |
+
+### `AccurateTime`
+Singleton helper for caching and synchronization.
+
+| Method | Description |
+|:-------|:------------|
+| `now()` | Returns `Future<DateTime>`. Syncs if cache is stale. |
+| `nowSync()` | Returns `DateTime`. Background syncs if stale. |
+| `setSyncInterval()` | Sets the duration before the next network sync is required. |
 
 ---
 
-## 💡 Common Use Cases
+## 💡 Use Cases
 
-- ✅ **Token validation** using accurate UTC for Firebase JWTs — see [firebase_verify_token_dart](https://pub.dev/packages/firebase_verify_token_dart)
-- 🕒 **Cross-platform logging** with consistent time
-- 🔔 **Scheduled actions** (notifications, tasks, resets)
-- 🔄 **Time-coordinated data sync**
-- 🧭 **UI clocks** that stay accurate over time
+- 🔐 **Authentication:** Validate tokens (JWT) with server-side expiry times.
+- 🎰 **Gaming & Contests:** prevent cheating by bypassing device clock.
+- ⏱️ **Countdowns:** Reliable timers for sales or events.
+- 📜 **Audit Trails:** Consistent timestamps for logs across devices.
 
 ---
 
 ## 🤝 Contributing
 
-Have feedback or a fix?  
-Open an [issue](https://github.com/enzo-desimone/ntp_dart/issues) or submit a [pull request](https://github.com/enzo-desimone/ntp_dart/pulls).
+We welcome contributions! Please check the [issues](https://github.com/enzo-desimone/ntp_dart/issues) or submit a [PR](https://github.com/enzo-desimone/ntp_dart/pulls).
 
 ---
 
-## 📃 License
-
-MIT License. See [LICENSE](https://github.com/enzo-desimone/ntp_dart/blob/master/LICENSE).
+<div align="center">
+  <sub>Built with ❤️ by <a href="https://github.com/enzo-desimone">Enzo De Simone</a></sub>
+</div>
