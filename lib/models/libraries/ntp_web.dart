@@ -18,7 +18,13 @@ class NtpClient extends NtpBase {
   /// Although [server] and [port] are accepted for API compatibility with
   /// other platforms, they are ignored in this web implementation.
   /// [timeout] is used as the HTTP request timeout.
-  const NtpClient({super.server, super.port, super.timeout});
+  const NtpClient({
+    super.server,
+    super.port,
+    super.timeout,
+    super.apiUrl,
+    super.parseResponse,
+  });
 
   /// The base URL of the time API endpoint.
   ///
@@ -40,9 +46,17 @@ class NtpClient extends NtpBase {
   /// date parsing does not succeed.
   @override
   Future<DateTime> now() async {
-    print('asdsad');
-    final uri = Uri.parse(_api);
-    final response = await http.get(uri);
+    final uri = Uri.parse(apiUrl ?? _api);
+    final startTime = DateTime.now();
+
+    final response = await http.get(uri).timeout(
+      Duration(seconds: timeout),
+      onTimeout: () {
+        throw Exception('Timeout fetching time from API');
+      },
+    );
+
+    final endTime = DateTime.now();
 
     if (response.statusCode != 200) {
       throw Exception(
@@ -51,10 +65,18 @@ class NtpClient extends NtpBase {
     }
 
     try {
-      final String stringDate = response.body;
-      final DateFormat format =
-          DateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", 'en_US');
-      return format.parseUTC(stringDate);
+      DateTime serverDate;
+      if (parseResponse != null) {
+        serverDate = parseResponse!(response);
+      } else {
+        final String stringDate = response.body;
+        final DateFormat format =
+            DateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", 'en_US');
+        serverDate = format.parseUTC(stringDate);
+      }
+
+      final latency = endTime.difference(startTime);
+      return serverDate.add(latency ~/ 2);
     } catch (e) {
       throw Exception('Error parsing time from API: $e');
     }

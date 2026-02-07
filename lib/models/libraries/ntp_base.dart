@@ -1,3 +1,5 @@
+import 'package:http/http.dart' as http;
+
 /// Base class for platform-specific NTP (Network Time Protocol) clients.
 ///
 /// This abstract class defines the common configuration parameters and
@@ -23,17 +25,30 @@ abstract class NtpBase {
   /// a timeout error.
   final int timeout;
 
+  /// The URL of the API endpoint to query for time (Web only).
+  final String? apiUrl;
+
+  /// A function to parse the response from the API endpoint (Web only).
+  final DateTime Function(http.Response)? parseResponse;
+
   /// Creates a new [NtpBase] instance with optional configuration parameters.
   ///
   /// All parameters are optional and have sensible defaults:
   /// - [server] defaults to `'pool.ntp.org'`
   /// - [port] defaults to `123`
   /// - [timeout] defaults to `5` seconds
+  ///
+  /// If [apiUrl] is provided, [parseResponse] must also be provided, and vice versa.
   const NtpBase({
     this.server = 'pool.ntp.org',
     this.port = 123,
     this.timeout = 5,
-  });
+    this.apiUrl,
+    this.parseResponse,
+  }) : assert(
+          (apiUrl != null) == (parseResponse != null),
+          'Both apiUrl and parseResponse must be provided together, or neither.',
+        );
 
   /// Retrieves the current UTC [DateTime] from the configured NTP source.
   ///

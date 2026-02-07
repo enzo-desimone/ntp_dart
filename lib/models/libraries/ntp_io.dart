@@ -20,7 +20,13 @@ class NtpClient extends NtpBase {
   /// - [server] specifies the NTP server hostname or IP address (default: `'pool.ntp.org'`)
   /// - [port] is the UDP port number for NTP communication (default: `123`)
   /// - [timeout] is the maximum duration in seconds to wait for a server response (default: `5`)
-  const NtpClient({super.server, super.port, super.timeout});
+  const NtpClient({
+    super.server,
+    super.port,
+    super.timeout,
+    super.apiUrl,
+    super.parseResponse,
+  });
 
   /// Retrieves the current UTC [DateTime] from the configured NTP server.
   ///
@@ -37,6 +43,7 @@ class NtpClient extends NtpBase {
     final ntpAddress = await _resolveServerAddress();
 
     final packet = _buildNtpPacket();
+    final T1 = DateTime.now();
     socket.send(packet, ntpAddress, port);
 
     final completer = Completer<DateTime>();
@@ -45,8 +52,21 @@ class NtpClient extends NtpBase {
       if (event == RawSocketEvent.read) {
         final datagram = socket.receive();
         if (datagram == null) return;
-        final dateTime = _parseNtpResponse(datagram.data);
-        completer.complete(dateTime);
+        final T4 = DateTime.now();
+
+        // Parse T2 (Receive Timestamp) and T3 (Transmit Timestamp)
+        final timestamps = _parseNtpTimestamps(datagram.data);
+        final T2 = timestamps.receiveTimestamp;
+        final T3 = timestamps.transmitTimestamp;
+
+        final offset = (T2.difference(T1).inMilliseconds +
+                T3.difference(T4).inMilliseconds) /
+            2;
+
+        final correctedTime =
+            DateTime.now().add(Duration(milliseconds: offset.round()));
+
+        completer.complete(correctedTime);
         socket.close();
       }
     });
@@ -80,14 +100,33 @@ class NtpClient extends NtpBase {
     return packet;
   }
 
-  /// Parses the NTP server's response and extracts the UTC [DateTime].
+  /// Parses the NTP server's response and extracts the Receive (T2) and Transmit (T3) timestamps.
   ///
-  /// The transmit timestamp begins at byte offset 40 in the packet.
-  /// This value is converted from NTP epoch (1900-01-01) to Unix epoch (1970-01-01).
-  DateTime _parseNtpResponse(Uint8List data) {
-    final secondsSince1900 = data.buffer.asByteData().getUint32(40);
-    const ntpEpochOffset = 2208988800;
-    final unixSeconds = secondsSince1900 - ntpEpochOffset;
-    return DateTime.fromMillisecondsSinceEpoch(unixSeconds * 1000, isUtc: true);
+  /// - T2: Receive Timestamp (bytes 32-39)
+  /// - T3: Transmit Timestamp (bytes 40-47)
+  ({DateTime receiveTimestamp, DateTime transmitTimestamp}) _parseNtpTimestamps(
+      Uint8List data) {
+    final byteData = data.buffer.asByteData();
+
+    // Helper to parse a 64-bit NTP timestamp
+    DateTime parseTimestamp(int offset) {
+      final secondsSince1900 = byteData.getUint32(offset);
+      final fraction = byteData.getUint32(offset + 4);
+
+      const ntpEpochOffset = 2208988800;
+      final unixSeconds = secondsSince1900 - ntpEpochOffset;
+
+      final milliseconds = (fraction * 1000) ~/ 4294967296;
+
+      return DateTime.fromMillisecondsSinceEpoch(
+        unixSeconds * 1000 + milliseconds,
+        isUtc: true,
+      );
+    }
+
+    return (
+      receiveTimestamp: parseTimestamp(32),
+      transmitTimestamp: parseTimestamp(40),
+    );
   }
 }

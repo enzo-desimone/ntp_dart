@@ -27,8 +27,8 @@
 
 `ntp_dart` ensures your app maintains **accurate UTC time** across platforms.
 
-- On **mobile/desktop**, it uses NTP protocol (UDP).
-- On **web**, it uses HTTP to fetch time from a JSON endpoint like `https://worldtimeapi.org/api/timezone/etc/utc`.
+- On **mobile/desktop**, it uses NTP protocol (UDP) with millisecond precision and latency compensation.
+- On **web**, it uses HTTP to fetch time from a JSON endpoint (defaults to Postman Echo) and applies latency compensation.
 
 This is crucial for:
 - Secure token verification
@@ -44,7 +44,7 @@ Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  ntp_dart: ^1.0.0
+  ntp_dart: ^1.2.0
 ```
 
 Then install:
@@ -69,7 +69,17 @@ import 'package:ntp_dart/accurate_time.dart';
 Fetch fresh UTC time from the server every time:
 
 ```dart
+// Default NTP sync (pool.ntp.org on mobile, postman-echo on web)
 final nowUtc = await NtpClient().now();
+
+// Custom Web API endpoint and parsing logic
+final customWebTime = await NtpClient(
+  apiUrl: 'https://worldtimeapi.org/api/timezone/Etc/UTC',
+  parseResponse: (response) {
+    final json = jsonDecode(response.body);
+    return DateTime.parse(json['utc_datetime']);
+  },
+).now();
 ```
 
 ---
@@ -94,16 +104,14 @@ triggers a background sync if the cache is missing or stale:
 final nowUtc = AccurateTime.nowSync();
 ```
 
-On **web**, `AccurateTime` fetches time from a JSON endpoint (default: `https://worldtimeapi.org/...`) and caches it for the given interval.
-
 ---
 
 ## 📘 API Reference
 
 | Method | Description |
 |--------|-------------|
-| `NtpClient({ String server = 'pool.ntp.org', int port = 123, int timeout = 5 })` | Constructor. Creates a new NTP client (non-Web only). |
-| `Future<DateTime> NtpClient().now()` | Fetches fresh UTC time from the specified NTP server. |
+| `NtpClient({ String server = 'pool.ntp.org', int port = 123, int timeout = 5, String? apiUrl, Function? parseResponse })` | Constructor. Create client with optional custom settings. `apiUrl` and `parseResponse` are Web-only. |
+| `Future<DateTime> NtpClient().now()` | Fetches fresh UTC time. Applies latency compensation. |
 | `Future<DateTime> AccurateTime.now()` | Returns cached UTC time or resynchronizes if the sync interval has expired. |
 | `DateTime AccurateTime.nowSync()` | Returns cached UTC time synchronously and triggers a background sync if needed. |
 | `void AccurateTime.setSyncInterval(Duration duration)` | Sets how often a new time sync should occur. Default: 60 minutes. |
