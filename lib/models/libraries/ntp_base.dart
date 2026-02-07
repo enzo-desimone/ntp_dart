@@ -1,5 +1,3 @@
-import 'package:http/http.dart' as http;
-
 /// Base class for platform-specific NTP (Network Time Protocol) clients.
 ///
 /// This abstract class defines the common configuration parameters and
@@ -7,6 +5,10 @@ import 'package:http/http.dart' as http;
 /// Concrete implementations (e.g., for mobile/desktop using UDP sockets,
 /// or for web using HTTP APIs) should extend this class and provide the
 /// platform-specific logic in the [now] method.
+library ntp_base;
+
+import 'package:http/http.dart' as http;
+
 abstract class NtpBase {
   /// The hostname or IP address of the NTP server to query.
   ///
