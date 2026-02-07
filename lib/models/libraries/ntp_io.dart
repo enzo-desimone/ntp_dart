@@ -26,6 +26,7 @@ class NtpClient extends NtpBase {
     super.timeout,
     super.apiUrl,
     super.parseResponse,
+    super.isUtc,
   });
 
   /// Retrieves the current UTC [DateTime] from the configured NTP server.
@@ -43,7 +44,7 @@ class NtpClient extends NtpBase {
     final ntpAddress = await _resolveServerAddress();
 
     final packet = _buildNtpPacket();
-    final T1 = DateTime.now();
+    final T1 = DateTime.now().toUtc();
     socket.send(packet, ntpAddress, port);
 
     final completer = Completer<DateTime>();
@@ -52,7 +53,7 @@ class NtpClient extends NtpBase {
       if (event == RawSocketEvent.read) {
         final datagram = socket.receive();
         if (datagram == null) return;
-        final T4 = DateTime.now();
+        final T4 = DateTime.now().toUtc();
 
         // Parse T2 (Receive Timestamp) and T3 (Transmit Timestamp)
         final timestamps = _parseNtpTimestamps(datagram.data);
@@ -66,7 +67,7 @@ class NtpClient extends NtpBase {
         final correctedTime =
             DateTime.now().add(Duration(milliseconds: offset.round()));
 
-        completer.complete(correctedTime);
+        completer.complete(isUtc ? correctedTime.toUtc() : correctedTime);
         socket.close();
       }
     });

@@ -31,12 +31,18 @@ abstract class NtpBase {
   /// A function to parse the response from the API endpoint (Web only).
   final DateTime Function(http.Response)? parseResponse;
 
+  /// Whether to return the time in UTC (true) or local time (false).
+  ///
+  /// Defaults to `false` (Local Time).
+  final bool isUtc;
+
   /// Creates a new [NtpBase] instance with optional configuration parameters.
   ///
   /// All parameters are optional and have sensible defaults:
   /// - [server] defaults to `'pool.ntp.org'`
   /// - [port] defaults to `123`
   /// - [timeout] defaults to `5` seconds
+  /// - [isUtc] defaults to `false`
   ///
   /// If [apiUrl] is provided, [parseResponse] must also be provided, and vice versa.
   const NtpBase({
@@ -45,6 +51,7 @@ abstract class NtpBase {
     this.timeout = 5,
     this.apiUrl,
     this.parseResponse,
+    this.isUtc = false,
   }) : assert(
           (apiUrl != null) == (parseResponse != null),
           'Both apiUrl and parseResponse must be provided together, or neither.',

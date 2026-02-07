@@ -24,6 +24,7 @@ class NtpClient extends NtpBase {
     super.timeout,
     super.apiUrl,
     super.parseResponse,
+    super.isUtc,
   });
 
   /// The base URL of the time API endpoint.
@@ -72,11 +73,13 @@ class NtpClient extends NtpBase {
         final String stringDate = response.body;
         final DateFormat format =
             DateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", 'en_US');
-        serverDate = format.parseUTC(stringDate);
+        serverDate = format.parse(stringDate, true);
       }
 
       final latency = endTime.difference(startTime);
-      return serverDate.add(latency ~/ 2);
+      final correctedTime = serverDate.add(latency ~/ 2);
+
+      return isUtc ? correctedTime.toUtc() : correctedTime;
     } catch (e) {
       throw Exception('Error parsing time from API: $e');
     }

@@ -2,6 +2,7 @@
 
 ## 1.2.0
 - Added `apiUrl` and `parseResponse` parameters to `NtpBase` to allow custom API endpoints and response parsing on Web.
+- Added `isUtc` parameter (default `false`) to control whether to return UTC or Local time.
 - Implemented latency compensation for both Web and IO.
 - Improved NTP timestamp parsing in IO to support millisecond precision.
 - Added timeout support for Web NTP requests.

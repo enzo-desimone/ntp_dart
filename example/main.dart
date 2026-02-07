@@ -3,41 +3,37 @@ import 'dart:convert';
 import 'package:ntp_dart/ntp_dart.dart';
 
 /// Entry point of the example application.
-///
-/// This example demonstrates:
-/// 1. Direct NTP fetch with latency compensation.
-/// 2. Custom Web API usage (e.g., WorldTimeAPI).
-/// 3. Cached time synchronization with `AccurateTime`.
-/// 4. Handling sync intervals and background updates.
-void main() async {
-  print('================================================================');
-  print('⏱️  NTP DART EXAMPLE');
-  print('================================================================');
-  print('Local System Time: ${DateTime.now().toUtc()} (UTC)');
-  print('');
+Future<void> main() async {
+  _printHeader('⏱️  NTP DART EXAMPLE');
+  print('Local System Time: ${DateTime.now()}');
+  print('Local UTC Time:    ${DateTime.now().toUtc()}');
 
-  // 1. Direct NTP Fetch
-  // ----------------------------------------------------------------
-  print('running direct NTP fetch...');
+  await _runDirectNtpFetch();
+  await _runCustomWebApi();
+  await _runAccurateTimeDemo();
+  await _runTimezoneCheck();
+
+  _printHeader('🏁  Example Completed');
+}
+
+/// 1. Direct NTP Fetch
+Future<void> _runDirectNtpFetch() async {
+  _printSection('1. Direct NTP Fetch');
+  print('Fetching time from default NTP server...');
   try {
-    // Uses pool.ntp.org (on mobile/desktop) or postman-echo (on web)
-    // Applies latency compensation automatically.
     final now = await NtpClient().now();
     print('✅ NTP Time (Default): $now');
   } catch (e) {
     print('❌ NTP Fetch Error: $e');
   }
-  print('');
+}
 
-  // 2. Custom Web API (Web Only Demo)
-  // ----------------------------------------------------------------
-  // Note: On mobile/desktop this will fall back to standard NTP via UDP,
-  // ignoring apiUrl/parseResponse but keeping the same API surface.
-  // On Web, it will use this specific endpoint and parser.
-  print('running custom API fetch (Web only features)...');
+/// 2. Custom Web API (Web Only Demo)
+Future<void> _runCustomWebApi() async {
+  _printSection('2. Custom Web API (Web-only features)');
+  print('Fetching time from WorldTimeAPI...');
   try {
     final customTime = await NtpClient(
-      // Example: WorldTimeAPI which returns JSON
       apiUrl: 'https://worldtimeapi.org/api/timezone/Etc/UTC',
       parseResponse: (response) {
         final json = jsonDecode(response.body);
@@ -49,14 +45,15 @@ void main() async {
   } catch (e) {
     print('❌ Custom API Error:  $e');
   }
-  print('');
+}
 
-  // 3. AccurateTime (Cached & Auto-Sync)
-  // ----------------------------------------------------------------
-  print('initializing AccurateTime...');
+/// 3. AccurateTime (Cached & Auto-Sync)
+Future<void> _runAccurateTimeDemo() async {
+  _printSection('3. AccurateTime (Cached & Auto-Sync)');
+  print('Initializing AccurateTime with 5s sync interval...');
 
   // Set a short interval to demonstrate re-syncing behavior
-  AccurateTime.setSyncInterval(Duration(seconds: 5));
+  AccurateTime.setSyncInterval(const Duration(seconds: 5));
 
   // First call fetches from network and caches result
   final accurateInitial = await AccurateTime.now();
@@ -66,14 +63,38 @@ void main() async {
   print('✅ AccurateTime (Cached):  ${AccurateTime.nowSync()}');
 
   print('\nWaiting for 6 seconds to trigger auto-resync...');
-  await Future.delayed(Duration(seconds: 6));
+  await Future.delayed(const Duration(seconds: 6));
 
   // Next call will trigger a background sync because cache is stale
-  // but returns immediately with the best available time (or awaits if necessary)
   final accurateResync = await AccurateTime.now();
   print('✅ AccurateTime (Resync):  $accurateResync');
+}
 
+/// 4. Timezone Support
+Future<void> _runTimezoneCheck() async {
+  _printSection('4. Timezone Support');
+  print('Checking UTC vs Local time retrieval...');
+  try {
+    final utcTime = await NtpClient(isUtc: true).now();
+    print('✅ NTP Time (UTC):   $utcTime\t(isUtc: ${utcTime.isUtc})');
+
+    final localTime = await NtpClient(isUtc: false).now();
+    print('✅ NTP Time (Local): $localTime\t(isUtc: ${localTime.isUtc})');
+  } catch (e) {
+    print('❌ Timezone Check Error: $e');
+  }
+}
+
+// --- Helpers ---
+
+void _printHeader(String title) {
   print('\n================================================================');
-  print('🏁  Example Completed');
-  print('================================================================');
+  print(title);
+  print('================================================================\n');
+}
+
+void _printSection(String title) {
+  print('\n----------------------------------------------------------------');
+  print(title);
+  print('----------------------------------------------------------------');
 }

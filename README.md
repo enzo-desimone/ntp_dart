@@ -111,6 +111,7 @@ The core client for fetching time.
 | `server` | `String` | NTP Server URL (Mobile/Desktop) | `'pool.ntp.org'` |
 | `port` | `int` | NTP Port (Mobile/Desktop) | `123` |
 | `timeout` | `int` | Request timeout in seconds | `5` |
+| `isUtc` | `bool` | Return UTC (`true`) or Local (`false`) | `false` |
 | `apiUrl` | `String?` | Time API URL (**Web Only**) | `null` (uses internal) |
 | `parseResponse`| `Function?` | Parser callback (**Web Only**) | `null` |
 
