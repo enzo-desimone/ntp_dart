@@ -80,6 +80,15 @@ Future<void> _runTimezoneCheck() async {
 
     final localTime = await NtpClient(isUtc: false).now();
     print('✅ NTP Time (Local): $localTime\t(isUtc: ${localTime.isUtc})');
+
+    print('\nChecking AccurateTime UTC vs Local...');
+    final accurateUtc = await AccurateTime.now(isUtc: true);
+    print(
+        '✅ AccurateTime (UTC):   $accurateUtc\t(isUtc: ${accurateUtc.isUtc})');
+
+    final accurateLocal = await AccurateTime.now(isUtc: false);
+    print(
+        '✅ AccurateTime (Local): $accurateLocal\t(isUtc: ${accurateLocal.isUtc})');
   } catch (e) {
     print('❌ Timezone Check Error: $e');
   }

@@ -120,8 +120,9 @@ Singleton helper for caching and synchronization.
 
 | Method | Description |
 |:-------|:------------|
-| `now()` | Returns `Future<DateTime>`. Syncs if cache is stale. |
-| `nowSync()` | Returns `DateTime`. Background syncs if stale. |
+| `now({bool isUtc = false})` | Returns `Future<DateTime>`. Syncs if cache is stale. |
+| `nowSync({bool isUtc = false})` | Returns `DateTime`. Background syncs if stale. |
+| `nowToIsoString({bool isUtc = true})` | Returns ISO 8601 string. |
 | `setSyncInterval()` | Sets the duration before the next network sync is required. |
 
 ---

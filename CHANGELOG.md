@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1
+- Added `isUtc` parameter (default `false`) to `AccurateTime.now()`, `AccurateTime.nowSync()`, and `AccurateTime.nowToIsoString()`.
+- Fixed caching logic in `AccurateTime` to always store UTC and convert to local only when requested.
+
 ## 1.2.0
 - Added `apiUrl` and `parseResponse` parameters to `NtpBase` to allow custom API endpoints and response parsing on Web.
 - Added `isUtc` parameter (default `false`) to control whether to return UTC or Local time.

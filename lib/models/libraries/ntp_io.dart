@@ -44,7 +44,7 @@ class NtpClient extends NtpBase {
     final ntpAddress = await _resolveServerAddress();
 
     final packet = _buildNtpPacket();
-    final T1 = DateTime.now().toUtc();
+    final t1 = DateTime.now().toUtc();
     socket.send(packet, ntpAddress, port);
 
     final completer = Completer<DateTime>();
@@ -53,15 +53,15 @@ class NtpClient extends NtpBase {
       if (event == RawSocketEvent.read) {
         final datagram = socket.receive();
         if (datagram == null) return;
-        final T4 = DateTime.now().toUtc();
+        final t4 = DateTime.now().toUtc();
 
         // Parse T2 (Receive Timestamp) and T3 (Transmit Timestamp)
         final timestamps = _parseNtpTimestamps(datagram.data);
-        final T2 = timestamps.receiveTimestamp;
-        final T3 = timestamps.transmitTimestamp;
+        final t2 = timestamps.receiveTimestamp;
+        final t3 = timestamps.transmitTimestamp;
 
-        final offset = (T2.difference(T1).inMilliseconds +
-                T3.difference(T4).inMilliseconds) /
+        final offset = (t2.difference(t1).inMilliseconds +
+                t3.difference(t4).inMilliseconds) /
             2;
 
         final correctedTime =
