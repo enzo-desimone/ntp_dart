@@ -1,6 +1,6 @@
 name: ntp_dart
-description: Lightweight Dart package to fetch accurate UTC time from NTP servers with no external dependencies.
-version: 1.2.1
+description: A lightweight, cross-platform NTP client for Dart & Flutter. Fetches highly accurate time via native UDP and Web HTTP fallbacks with microsecond precision and secure caching.
+version: 1.3.0
 homepage: https://github.com/enzo-desimone/ntp_dart
 
 environment:
@@ -11,4 +11,5 @@ dependencies:
   intl: ^0.20.2
 
 dev_dependencies:
-  very_good_analysis: ^10.0.0
+  test: ^1.31.1
+  flutter_lints: ^6.0.0

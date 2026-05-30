@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.0
+- **Refactored Cache**: Transitioned `AccurateTime` cache to use time offset calculation (`cachedOffset`) rather than absolute datetime tracking, boosting reliability and simplifying local drift corrections.
+- **Microsecond Precision**: Enhanced UDP packet timestamp parsing and math to support full microsecond accuracy (matching Dart's `DateTime` resolution).
+- **Socket and Stream Safety**: Rewrote UDP networking in `ntp_io.dart` with robust `try-finally` blocks to guarantee socket closure and prevent resource leakages on bad networks or cancellation.
+- **RFC 5905 Security Compliance**: Implemented transmit timestamp writing and randomized low-order bits on client request packets to resist off-path spoofing and replay attacks.
+- **NtpServer Enum**: Introduced `NtpServer` enum offering curated, ultra-reliable servers (`google`, `cloudflare`, `apple`, `microsoft`, `nist`, `pool`).
+- **Flexible Fallbacks**: Added `allowFallback` and `forceRefresh` to `AccurateTime.now()`.
+- **Test Suite**: Introduced a comprehensive unit testing framework in `test/ntp_dart_test.dart`.
+
 ## 1.2.1
 - Added `isUtc` parameter (default `false`) to `AccurateTime.now()`, `AccurateTime.nowSync()`, and `AccurateTime.nowToIsoString()`.
 - Fixed caching logic in `AccurateTime` to always store UTC and convert to local only when requested.

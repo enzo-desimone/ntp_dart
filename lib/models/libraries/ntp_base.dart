@@ -5,11 +5,32 @@
 /// Concrete implementations (e.g., for mobile/desktop using UDP sockets,
 /// or for web using HTTP APIs) should extend this class and provide the
 /// platform-specific logic in the [now] method.
-library ntp_base;
+library;
 
 import 'package:http/http.dart' as http;
 
 abstract class NtpBase {
+  /// Creates a new [NtpBase] instance with optional configuration parameters.
+  ///
+  /// All parameters are optional and have sensible defaults:
+  /// - [server] defaults to `'pool.ntp.org'`
+  /// - [port] defaults to `123`
+  /// - [timeout] defaults to `5` seconds
+  /// - [isUtc] defaults to `false`
+  ///
+  /// If [apiUrl] is provided, [parseResponse] must also be provided, and vice versa.
+  const NtpBase({
+    this.server = 'pool.ntp.org',
+    this.port = 123,
+    this.timeout = 5,
+    this.apiUrl,
+    this.parseResponse,
+    this.isUtc = false,
+  }) : assert(
+          (apiUrl != null) == (parseResponse != null),
+          'Both apiUrl and parseResponse must be provided together, or neither.',
+        );
+
   /// The hostname or IP address of the NTP server to query.
   ///
   /// Defaults to `'pool.ntp.org'`, which is a publicly accessible NTP pool.
@@ -37,27 +58,6 @@ abstract class NtpBase {
   ///
   /// Defaults to `false` (Local Time).
   final bool isUtc;
-
-  /// Creates a new [NtpBase] instance with optional configuration parameters.
-  ///
-  /// All parameters are optional and have sensible defaults:
-  /// - [server] defaults to `'pool.ntp.org'`
-  /// - [port] defaults to `123`
-  /// - [timeout] defaults to `5` seconds
-  /// - [isUtc] defaults to `false`
-  ///
-  /// If [apiUrl] is provided, [parseResponse] must also be provided, and vice versa.
-  const NtpBase({
-    this.server = 'pool.ntp.org',
-    this.port = 123,
-    this.timeout = 5,
-    this.apiUrl,
-    this.parseResponse,
-    this.isUtc = false,
-  }) : assert(
-          (apiUrl != null) == (parseResponse != null),
-          'Both apiUrl and parseResponse must be provided together, or neither.',
-        );
 
   /// Retrieves the current UTC [DateTime] from the configured NTP source.
   ///

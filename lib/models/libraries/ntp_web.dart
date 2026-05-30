@@ -1,7 +1,6 @@
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-
-import 'ntp_base.dart';
+import 'package:ntp_dart/models/libraries/ntp_base.dart';
 
 /// A web-based implementation of an NTP (Network Time Protocol) client.
 ///
@@ -70,9 +69,8 @@ class NtpClient extends NtpBase {
       if (parseResponse != null) {
         serverDate = parseResponse!(response);
       } else {
-        final String stringDate = response.body;
-        final DateFormat format =
-            DateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", 'en_US');
+        final stringDate = response.body;
+        final format = DateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", 'en_US');
         serverDate = format.parse(stringDate, true);
       }
 

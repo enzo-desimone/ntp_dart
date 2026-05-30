@@ -1,67 +1,162 @@
 import 'dart:async';
 
-import 'libraries/libraries.dart';
+import 'package:ntp_dart/models/libraries/libraries.dart';
 
-/// A static class to manage accurate UTC time using HTTP synchronization and local caching.
+/// Curated list of public NTP servers.
+enum NtpServer {
+  google('time.google.com'),
+  cloudflare('time.cloudflare.com'),
+  facebook('time.facebook.com'),
+  microsoft('time.windows.com'),
+  apple('time.apple.com'),
+  nist('time.nist.gov'),
+  pool('pool.ntp.org');
+
+  const NtpServer(this.url);
+
+  /// The URL of the NTP server.
+  final String url;
+}
+
+/// A static class to manage accurate UTC time using HTTP/UDP synchronization
+/// and local caching.
 class AccurateTime {
-  /// The last fetched accurate UTC time from the NTP server.
-  static DateTime? _cachedUtcTime;
+  /// The last measured offset (server time minus device local time).
+  static Duration? _cachedOffset;
 
-  /// The local time when the last NTP sync occurred.
-  static DateTime? _lastNtpSync;
+  /// The local time when the last successful NTP sync occurred.
+  static DateTime? _lastSyncTime;
 
   /// The interval at which the time should be resynchronized.
   static Duration _syncInterval = const Duration(minutes: 60);
 
+  /// Factory function to create an [NtpClient] instance.
+  /// Primarily used to inject mock/stub clients during unit testing.
+  static NtpClient Function({
+    String server,
+    int port,
+    int timeout,
+    bool isUtc,
+  })? ntpClientFactory;
+
   /// NTP client instance (customizable if needed)
-  static NtpClient _ntpClient({bool isUtc = true}) {
-    return NtpClient(isUtc: isUtc);
+  static NtpClient _createNtpClient({
+    String server = 'pool.ntp.org',
+    int port = 123,
+    int timeout = 5,
+    bool isUtc = true,
+  }) {
+    if (ntpClientFactory != null) {
+      return ntpClientFactory!(
+        server: server,
+        port: port,
+        timeout: timeout,
+        isUtc: isUtc,
+      );
+    }
+    return NtpClient(
+      server: server,
+      port: port,
+      timeout: timeout,
+      isUtc: isUtc,
+    );
   }
+
+  /// Returns the current accurate cached offset (server time - local time).
+  static Duration? get cachedOffset => _cachedOffset;
+
+  /// Returns the local time when the last successful synchronization occurred.
+  static DateTime? get lastSyncTime => _lastSyncTime;
 
   /// Returns the current accurate time.
   ///
   /// If [isUtc] is `true`, returns the time in UTC.
   /// If [isUtc] is `false` (default), returns the time in the local time zone.
   ///
-  /// If the cached time is outdated or not initialized, it fetches the time
-  /// from an NTP server. Then it adjusts based on local time drift.
-  static Future<DateTime> now({bool isUtc = false}) async {
-    if (_cachedUtcTime == null ||
-        _lastNtpSync == null ||
-        DateTime.now().difference(_lastNtpSync!) > _syncInterval) {
-      await _syncNtpTime();
+  /// If [server] is specified (defaults to [NtpServer.google]), it queries that server.
+  /// You can also provide a custom raw server URL string via [customServer].
+  ///
+  /// If [forceRefresh] is `true`, a network request is forced even if a fresh
+  /// cache exists.
+  ///
+  /// If [allowFallback] is `true` (default), returns the local device time on failure
+  /// instead of throwing an error.
+  static Future<DateTime> now({
+    bool isUtc = false,
+    NtpServer server = NtpServer.google,
+    String? customServer,
+    int port = 123,
+    int timeout = 5,
+    bool forceRefresh = false,
+    bool allowFallback = true,
+  }) async {
+    final nowLocal = DateTime.now();
+
+    final hasFreshCache = _cachedOffset != null &&
+        _lastSyncTime != null &&
+        nowLocal.difference(_lastSyncTime!) <= _syncInterval;
+
+    if (forceRefresh || !hasFreshCache) {
+      try {
+        await _syncNtpTime(
+          server: customServer ?? server.url,
+          port: port,
+          timeout: timeout,
+        );
+      } catch (e) {
+        if (!allowFallback) {
+          rethrow;
+        }
+      }
     }
 
-    final timeDifference = DateTime.now().difference(_lastNtpSync!);
-    final accurateTime = _cachedUtcTime!.add(timeDifference);
-    return isUtc ? accurateTime : accurateTime.toLocal();
+    final corrected = DateTime.now().add(_cachedOffset ?? Duration.zero);
+    return isUtc ? corrected.toUtc() : corrected.toLocal();
   }
 
-  /// Returns the current accurate time synchronously.
+  /// Returns the current accurate time synchronously using the cached offset.
   ///
   /// If [isUtc] is `true`, returns the time in UTC.
   /// If [isUtc] is `false` (default), returns the time in the local time zone.
   ///
   /// If the cache has not been initialized yet, it triggers an asynchronous
-  /// synchronization and returns the local system time (or UTC if [isUtc] is true).
-  /// When the cache is available, it computes the accurate time using the cached
-  /// value. If the cached value is older than the configured sync interval, a
+  /// synchronization in the background and returns the local system time.
+  ///
+  /// If the cached value is older than the configured sync interval, a
   /// background resynchronization is triggered while still returning the
-  /// computed time.
-  static DateTime nowSync({bool isUtc = false}) {
-    if (_cachedUtcTime == null || _lastNtpSync == null) {
-      unawaited(_syncNtpTime());
-      final now = DateTime.now();
-      return isUtc ? now.toUtc() : now;
+  /// computed time based on the cached offset.
+  static DateTime nowSync({
+    bool isUtc = false,
+    NtpServer server = NtpServer.google,
+    String? customServer,
+    int port = 123,
+    int timeout = 5,
+  }) {
+    final nowLocal = DateTime.now();
+
+    if (_cachedOffset == null || _lastSyncTime == null) {
+      unawaited(
+        _syncNtpTime(
+          server: customServer ?? server.url,
+          port: port,
+          timeout: timeout,
+        ),
+      );
+      return isUtc ? nowLocal.toUtc() : nowLocal;
     }
 
-    final timeDifference = DateTime.now().difference(_lastNtpSync!);
-    if (timeDifference > _syncInterval) {
-      unawaited(_syncNtpTime());
+    if (nowLocal.difference(_lastSyncTime!) > _syncInterval) {
+      unawaited(
+        _syncNtpTime(
+          server: customServer ?? server.url,
+          port: port,
+          timeout: timeout,
+        ),
+      );
     }
 
-    final accurateTime = _cachedUtcTime!.add(timeDifference);
-    return isUtc ? accurateTime : accurateTime.toLocal();
+    final corrected = nowLocal.add(_cachedOffset!);
+    return isUtc ? corrected.toUtc() : corrected.toLocal();
   }
 
   /// Returns the current accurate time as an ISO 8601 string.
@@ -70,18 +165,28 @@ class AccurateTime {
   static Future<String> nowToIsoString({bool isUtc = true}) =>
       now(isUtc: isUtc).then((time) => time.toIso8601String());
 
-  /// Fetches the current UTC time from the NTP server and updates the cache.
-  ///
-  /// If the request fails, the cached time will not be updated.
-  static Future<void> _syncNtpTime() async {
+  /// Fetches the offset from the NTP server and updates the cache.
+  static Future<void> _syncNtpTime({
+    required String server,
+    required int port,
+    required int timeout,
+  }) async {
     try {
-      final ntpTime = await _ntpClient(isUtc: true).now();
-      _lastNtpSync = DateTime.now();
-      _cachedUtcTime = ntpTime;
+      final client = _createNtpClient(
+        server: server,
+        port: port,
+        timeout: timeout,
+      );
+      final serverTime = await client.now();
+      final nowLocal = DateTime.now();
+      _cachedOffset = serverTime.difference(nowLocal);
+      _lastSyncTime = nowLocal;
     } catch (e) {
-      final fallback = DateTime.now();
-      _lastNtpSync = fallback;
-      _cachedUtcTime = fallback.toUtc();
+      if (_cachedOffset == null) {
+        _cachedOffset = Duration.zero;
+        _lastSyncTime = DateTime.now();
+      }
+      rethrow;
     }
   }
 
@@ -91,5 +196,11 @@ class AccurateTime {
   /// synchronizations.
   static void setSyncInterval(Duration newInterval) {
     _syncInterval = newInterval;
+  }
+
+  /// Clears the cached NTP offset and synchronization time.
+  static void clearCache() {
+    _cachedOffset = null;
+    _lastSyncTime = null;
   }
 }

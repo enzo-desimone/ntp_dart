@@ -15,14 +15,15 @@
 
 ---
 
-**NTP Dart** guarantees your application has access to **accurate UTC time**, regardless of valid local device settings. It seamlessly handles both cross-platform differences and network conditions to deliver reliable time data.
+**NTP Dart** guarantees your application has access to **accurate UTC time**, regardless of local device settings. It seamlessly handles both cross-platform differences and network conditions to deliver highly reliable time data.
 
 ### 🚀 Why choose ntp_dart?
 
-- **🛠 Cross-Platform:** Native UDP NTP on **Mobile/Desktop**, HTTP on **Web**.
-- **⚡ Accurate:** Millisecond precision with **Latency Compensation**.
-- **🔋 Efficient:** Built-in caching with `AccurateTime` to minimize network requests.
-- **🌍 Flexible:** Configurable servers, custom Web APIs (e.g., WorldTimeAPI), and sync intervals.
+- **🛠 Cross-Platform:** Native UDP NTP on **Mobile/Desktop**, HTTP fallback on **Web**.
+- **⚡ Extremely Accurate:** High-precision **microsecond precision** parsing with Latency Compensation.
+- **🛡 Robust & Secure:** Randomizes packets to resist spoofing/replay attacks (RFC 5905 compliant), plus maximum offset sanity bounds.
+- **🔋 Efficient:** Offset-based cache minimizes network requests, recalculating dynamically from the hardware clock.
+- **🌍 Flexible:** Curated `NtpServer` enum (Google, Cloudflare, Apple, etc.), custom web API support, custom sync intervals, and optional grace fallbacks.
 
 ---
 
@@ -40,7 +41,7 @@ Add the dependency to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  ntp_dart: ^1.2.0
+  ntp_dart: ^1.3.0
 ```
 
 Run installation:
@@ -69,6 +70,8 @@ final DateTime now = await NtpClient().now();
 On Web, you can customize the API endpoint and parsing logic (e.g., using **WorldTimeAPI**).
 
 ```dart
+import 'dart:convert';
+
 final customWebTime = await NtpClient(
   // Custom API Endpoint
   apiUrl: 'https://worldtimeapi.org/api/timezone/Etc/UTC',
@@ -86,7 +89,15 @@ Use `AccurateTime` to maintain a synced clock without spamming network requests.
 
 **Async (Checks cache, syncs if needed):**
 ```dart
+// Fetch using Google NTP server (default)
 final DateTime now = await AccurateTime.now();
+
+// Fetch forcing refresh, using Cloudflare, and throwing on failure instead of falling back
+final DateTime cloudflareTime = await AccurateTime.now(
+  server: NtpServer.cloudflare,
+  forceRefresh: true,
+  allowFallback: false,
+);
 ```
 
 **Sync (Returns cache immediately, syncs in background):**
@@ -99,9 +110,26 @@ final DateTime now = AccurateTime.nowSync();
 AccurateTime.setSyncInterval(Duration(minutes: 15));
 ```
 
+**Clear Cache:**
+```dart
+AccurateTime.clearCache();
+```
+
 ---
 
 ## 📘 API Reference
+
+### `NtpServer`
+An enum containing popular, highly reliable NTP servers:
+* `NtpServer.google` (`'time.google.com'`)
+* `NtpServer.cloudflare` (`'time.cloudflare.com'`)
+* `NtpServer.facebook` (`'time.facebook.com'`)
+* `NtpServer.microsoft` (`'time.windows.com'`)
+* `NtpServer.apple` (`'time.apple.com'`)
+* `NtpServer.nist` (`'time.nist.gov'`)
+* `NtpServer.pool` (`'pool.ntp.org'`)
+
+---
 
 ### `NtpClient`
 The core client for fetching time.
@@ -115,15 +143,20 @@ The core client for fetching time.
 | `apiUrl` | `String?` | Time API URL (**Web Only**) | `null` (uses internal) |
 | `parseResponse`| `Function?` | Parser callback (**Web Only**) | `null` |
 
+---
+
 ### `AccurateTime`
 Singleton helper for caching and synchronization.
 
-| Method | Description |
+| Method / Getter | Description |
 |:-------|:------------|
-| `now({bool isUtc = false})` | Returns `Future<DateTime>`. Syncs if cache is stale. |
-| `nowSync({bool isUtc = false})` | Returns `DateTime`. Background syncs if stale. |
+| `now({bool isUtc = false, NtpServer server, String? customServer, bool forceRefresh = false, bool allowFallback = true})` | Returns `Future<DateTime>`. Syncs if cache is stale or force-refreshed. |
+| `nowSync({bool isUtc = false, NtpServer server, String? customServer})` | Returns `DateTime`. Background syncs if stale. |
 | `nowToIsoString({bool isUtc = true})` | Returns ISO 8601 string. |
-| `setSyncInterval()` | Sets the duration before the next network sync is required. |
+| `setSyncInterval(Duration)` | Sets the duration before the next network sync is required. |
+| `clearCache()` | Clears the cached offset. |
+| `cachedOffset` | Getter for `Duration?` offset currently cached. |
+| `lastSyncTime` | Getter for `DateTime?` local time of last successful sync. |
 
 ---
 
