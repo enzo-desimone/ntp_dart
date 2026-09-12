@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/enzo-desimone/ntp_dart/master/example/ntp_dart.webp" alt="NTP Dart" width="400" style="border-radius: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
+<img src="https://raw.githubusercontent.com/enzo-desimone/ntp_dart/master/example/ntp-dart.webp" alt="NTP Dart" width="400" style="border-radius: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
 
 **The Reliable Cross-Platform Time Synchronization Plugin for Flutter & Dart**
 
@@ -41,7 +41,7 @@ Add the dependency to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  ntp_dart: ^1.3.0
+  ntp_dart: ^1.3.1
 ```
 
 Run installation:

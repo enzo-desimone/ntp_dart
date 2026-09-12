@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.1
+- **Unhandled Exception Fix**: Fixed uncaught asynchronous exceptions (`TimeoutException`, `SocketException`, and DNS lookup errors) leaking to `PlatformDispatcher.onError` during background synchronization triggered by `AccurateTime.nowSync()`.
+- **In-Flight Request Deduplication**: Added synchronization deduplication to prevent duplicate network requests and socket allocations when `AccurateTime.nowSync()` or `AccurateTime.now()` are called concurrently.
+- **Cache Management**: Enhanced `AccurateTime.clearCache()` to properly reset in-flight synchronization state.
+
 ## 1.3.0
 - **Refactored Cache**: Transitioned `AccurateTime` cache to use time offset calculation (`cachedOffset`) rather than absolute datetime tracking, boosting reliability and simplifying local drift corrections.
 - **Microsecond Precision**: Enhanced UDP packet timestamp parsing and math to support full microsecond accuracy (matching Dart's `DateTime` resolution).

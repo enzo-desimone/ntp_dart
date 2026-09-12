@@ -62,6 +62,12 @@ class AccurateTime {
     );
   }
 
+  /// The in-flight synchronization future, if any.
+  static Future<void>? _ongoingSync;
+
+  /// Curated list of public NTP servers.
+  static Duration get syncInterval => _syncInterval;
+
   /// Returns the current accurate cached offset (server time - local time).
   static Duration? get cachedOffset => _cachedOffset;
 
@@ -135,28 +141,44 @@ class AccurateTime {
     final nowLocal = DateTime.now();
 
     if (_cachedOffset == null || _lastSyncTime == null) {
-      unawaited(
-        _syncNtpTime(
-          server: customServer ?? server.url,
-          port: port,
-          timeout: timeout,
-        ),
+      _triggerBackgroundSync(
+        server: customServer ?? server.url,
+        port: port,
+        timeout: timeout,
       );
       return isUtc ? nowLocal.toUtc() : nowLocal;
     }
 
     if (nowLocal.difference(_lastSyncTime!) > _syncInterval) {
-      unawaited(
-        _syncNtpTime(
-          server: customServer ?? server.url,
-          port: port,
-          timeout: timeout,
-        ),
+      _triggerBackgroundSync(
+        server: customServer ?? server.url,
+        port: port,
+        timeout: timeout,
       );
     }
 
     final corrected = nowLocal.add(_cachedOffset!);
     return isUtc ? corrected.toUtc() : corrected.toLocal();
+  }
+
+  /// Triggers a background sync, safely capturing any error so it does not
+  /// leak as an unhandled asynchronous exception to the root zone.
+  static void _triggerBackgroundSync({
+    required String server,
+    required int port,
+    required int timeout,
+  }) {
+    unawaited(
+      _syncNtpTime(
+        server: server,
+        port: port,
+        timeout: timeout,
+      ).catchError((Object error, StackTrace stackTrace) {
+        // Silently catch background synchronization errors (e.g. timeouts or
+        // unreachable hosts) to prevent unhandled asynchronous exceptions
+        // from bubbling up to PlatformDispatcher.onError.
+      }),
+    );
   }
 
   /// Returns the current accurate time as an ISO 8601 string.
@@ -166,7 +188,34 @@ class AccurateTime {
       now(isUtc: isUtc).then((time) => time.toIso8601String());
 
   /// Fetches the offset from the NTP server and updates the cache.
+  ///
+  /// Deduplicates concurrent synchronization requests by reusing the in-flight
+  /// future if one is already in progress.
   static Future<void> _syncNtpTime({
+    required String server,
+    required int port,
+    required int timeout,
+  }) {
+    final ongoing = _ongoingSync;
+    if (ongoing != null) {
+      return ongoing;
+    }
+
+    final syncFuture = _performSyncNtpTime(
+      server: server,
+      port: port,
+      timeout: timeout,
+    );
+
+    final future = syncFuture.whenComplete(() {
+      _ongoingSync = null;
+    });
+
+    _ongoingSync = future;
+    return future;
+  }
+
+  static Future<void> _performSyncNtpTime({
     required String server,
     required int port,
     required int timeout,
@@ -202,5 +251,6 @@ class AccurateTime {
   static void clearCache() {
     _cachedOffset = null;
     _lastSyncTime = null;
+    _ongoingSync = null;
   }
 }

@@ -190,6 +190,142 @@ void main() {
       expect(AccurateTime.cachedOffset!.inSeconds, closeTo(10, 1));
     });
 
+    test(
+        'nowSync() background sync failure does not produce unhandled async error',
+        () async {
+      AccurateTime.ntpClientFactory = ({
+        server = 'pool.ntp.org',
+        port = 123,
+        timeout = 5,
+        isUtc = true,
+      }) {
+        return FakeNtpClient(
+          nowMock: () async {
+            throw TimeoutException('Timeout while contacting the NTP server');
+          },
+        );
+      };
+
+      expect(() => AccurateTime.nowSync(), returnsNormally);
+
+      // Wait for background task to complete
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(AccurateTime.cachedOffset, Duration.zero);
+    });
+
+    test(
+        'nowSync() background sync DNS lookup failure does not produce unhandled async error',
+        () async {
+      AccurateTime.ntpClientFactory = ({
+        server = 'pool.ntp.org',
+        port = 123,
+        timeout = 5,
+        isUtc = true,
+      }) {
+        return FakeNtpClient(
+          nowMock: () async {
+            throw Exception(
+              "Unable to resolve NTP server address: SocketException: Failed host lookup: 'time.google.com' (OS Error: nodename nor servname provided, or not known, errno = 8)",
+            );
+          },
+        );
+      };
+
+      expect(() => AccurateTime.nowSync(), returnsNormally);
+
+      // Wait for background task to complete
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(AccurateTime.cachedOffset, Duration.zero);
+    });
+
+    test('nowSync() deduplicates concurrent background sync requests',
+        () async {
+      final completer = Completer<DateTime>();
+      AccurateTime.ntpClientFactory = ({
+        server = 'pool.ntp.org',
+        port = 123,
+        timeout = 5,
+        isUtc = true,
+      }) {
+        return FakeNtpClient(
+          nowMock: () async {
+            callCount++;
+            return completer.future;
+          },
+        );
+      };
+
+      AccurateTime.nowSync();
+      AccurateTime.nowSync();
+      AccurateTime.nowSync();
+
+      expect(callCount, 1);
+
+      completer.complete(DateTime.now().toUtc());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    });
+
+    test('now() deduplicates concurrent sync requests', () async {
+      final completer = Completer<DateTime>();
+      AccurateTime.ntpClientFactory = ({
+        server = 'pool.ntp.org',
+        port = 123,
+        timeout = 5,
+        isUtc = true,
+      }) {
+        return FakeNtpClient(
+          nowMock: () async {
+            callCount++;
+            return completer.future;
+          },
+        );
+      };
+
+      final future1 = AccurateTime.now(isUtc: true);
+      final future2 = AccurateTime.now(isUtc: true);
+
+      expect(callCount, 1);
+
+      final fakeServerTime =
+          DateTime.now().toUtc().add(const Duration(seconds: 10));
+      completer.complete(fakeServerTime);
+
+      final res1 = await future1;
+      final res2 = await future2;
+
+      expect(callCount, 1);
+      expect(res1.difference(fakeServerTime).inSeconds, closeTo(0, 1));
+      expect(res2.difference(fakeServerTime).inSeconds, closeTo(0, 1));
+    });
+
+    test(
+        'concurrent now(allowFallback: false) throws on error while nowSync is unhurt',
+        () async {
+      AccurateTime.ntpClientFactory = ({
+        server = 'pool.ntp.org',
+        port = 123,
+        timeout = 5,
+        isUtc = true,
+      }) {
+        return FakeNtpClient(
+          nowMock: () async {
+            throw TimeoutException('Timeout while contacting the NTP server');
+          },
+        );
+      };
+
+      // nowSync triggers background sync
+      AccurateTime.nowSync();
+
+      // now(allowFallback: false) joins in-flight sync and propagates failure
+      expect(
+        () => AccurateTime.now(allowFallback: false),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
+
     test('clearCache() empties cache values', () async {
       mockClientResponses = [DateTime.now().toUtc()];
       await AccurateTime.now();
