@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.3.2
+- **Documentation & Showcase**: Added package screenshot metadata in `pubspec.yaml` for pub.dev preview.
+
 ## 1.3.1
 - **Unhandled Exception Fix**: Fixed uncaught asynchronous exceptions (`TimeoutException`, `SocketException`, and DNS lookup errors) leaking to `PlatformDispatcher.onError` during background synchronization triggered by `AccurateTime.nowSync()`.
 - **In-Flight Request Deduplication**: Added synchronization deduplication to prevent duplicate network requests and socket allocations when `AccurateTime.nowSync()` or `AccurateTime.now()` are called concurrently.
