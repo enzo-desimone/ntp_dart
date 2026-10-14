@@ -26,7 +26,9 @@ abstract class NtpBase {
     this.apiUrl,
     this.parseResponse,
     this.isUtc = false,
-  }) : assert(
+  })  : assert(port > 0 && port <= 65535, 'Port must be between 1 and 65535.'),
+        assert(timeout > 0, 'Timeout must be greater than 0 seconds.'),
+        assert(
           (apiUrl != null) == (parseResponse != null),
           'Both apiUrl and parseResponse must be provided together, or neither.',
         );

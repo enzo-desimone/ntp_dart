@@ -21,14 +21,39 @@ enum NtpServer {
 /// A static class to manage accurate UTC time using HTTP/UDP synchronization
 /// and local caching.
 class AccurateTime {
+  // Private constructor to prevent instantiation.
+  AccurateTime._();
+
+  /// Monotonic clock used to measure intervals and detect system clock tampering.
+  static final Stopwatch _stopwatch = Stopwatch()..start();
+
+  /// Maximum tolerated divergence between wall-clock and monotonic elapsed time
+  /// before assuming the system clock was manually altered or jumped.
+  static const Duration _maxClockSkew = Duration(seconds: 2);
+
   /// The last measured offset (server time minus device local time).
   static Duration? _cachedOffset;
 
   /// The local time when the last successful NTP sync occurred.
   static DateTime? _lastSyncTime;
 
+  /// Monotonic elapsed duration when the last successful NTP sync occurred.
+  static Duration? _lastSyncElapsed;
+
+  /// The local time when a synchronization attempt last failed.
+  static DateTime? _lastFailedAttempt;
+
+  /// Monotonic elapsed duration when a synchronization attempt last failed.
+  static Duration? _lastFailedElapsed;
+
   /// The interval at which the time should be resynchronized.
   static Duration _syncInterval = const Duration(minutes: 60);
+
+  /// The cooldown duration before retrying after a failed sync.
+  static Duration _retryCooldown = const Duration(seconds: 15);
+
+  /// Monotonically increasing generation to invalidate in-flight syncs on clearCache.
+  static int _syncGeneration = 0;
 
   /// Factory function to create an [NtpClient] instance.
   /// Primarily used to inject mock/stub clients during unit testing.
@@ -65,14 +90,60 @@ class AccurateTime {
   /// The in-flight synchronization future, if any.
   static Future<void>? _ongoingSync;
 
-  /// Curated list of public NTP servers.
+  /// Interval between scheduled resynchronizations.
   static Duration get syncInterval => _syncInterval;
+
+  /// The cooldown duration before retrying after a failed sync.
+  static Duration get retryCooldown => _retryCooldown;
+
+  /// Updates the cooldown duration before retrying after a failed sync.
+  static void setRetryCooldown(Duration duration) {
+    _retryCooldown = duration;
+  }
 
   /// Returns the current accurate cached offset (server time - local time).
   static Duration? get cachedOffset => _cachedOffset;
 
   /// Returns the local time when the last successful synchronization occurred.
   static DateTime? get lastSyncTime => _lastSyncTime;
+
+  /// Returns the local time when a synchronization attempt last failed.
+  static DateTime? get lastFailedAttempt => _lastFailedAttempt;
+
+  /// Checks whether the cached offset is present, within [_syncInterval],
+  /// and free of system wall-clock tampering relative to the monotonic clock.
+  static bool _isCacheFresh(DateTime nowLocal) {
+    final offset = _cachedOffset;
+    final syncTime = _lastSyncTime;
+    final syncElapsed = _lastSyncElapsed;
+    if (offset == null || syncTime == null || syncElapsed == null) {
+      return false;
+    }
+
+    final monoElapsed = _stopwatch.elapsed - syncElapsed;
+    if (monoElapsed.isNegative || monoElapsed > _syncInterval) {
+      return false;
+    }
+
+    final wallElapsed = nowLocal.difference(syncTime);
+    if (wallElapsed.isNegative || wallElapsed > _syncInterval) {
+      return false;
+    }
+
+    // If wall-clock delta diverges from monotonic delta, the device clock jumped or was tampered with.
+    if ((wallElapsed - monoElapsed).abs() > _maxClockSkew) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /// Checks whether a failed attempt occurred within [_retryCooldown] using the monotonic clock.
+  static bool _isInCooldown() {
+    final failedElapsed = _lastFailedElapsed;
+    if (failedElapsed == null) return false;
+    return (_stopwatch.elapsed - failedElapsed) < _retryCooldown;
+  }
 
   /// Returns the current accurate time.
   ///
@@ -97,12 +168,11 @@ class AccurateTime {
     bool allowFallback = true,
   }) async {
     final nowLocal = DateTime.now();
+    final hasFreshCache = _isCacheFresh(nowLocal);
+    final hasOngoingSync = _ongoingSync != null;
+    final inCooldown = !hasOngoingSync && !forceRefresh && _isInCooldown();
 
-    final hasFreshCache = _cachedOffset != null &&
-        _lastSyncTime != null &&
-        nowLocal.difference(_lastSyncTime!) <= _syncInterval;
-
-    if (forceRefresh || !hasFreshCache) {
+    if (forceRefresh || (!hasFreshCache && !inCooldown) || hasOngoingSync) {
       try {
         await _syncNtpTime(
           server: customServer ?? server.url,
@@ -139,25 +209,22 @@ class AccurateTime {
     int timeout = 5,
   }) {
     final nowLocal = DateTime.now();
+    final shouldSync = !_isCacheFresh(nowLocal);
 
-    if (_cachedOffset == null || _lastSyncTime == null) {
+    if (shouldSync && !_isInCooldown() && _ongoingSync == null) {
       _triggerBackgroundSync(
         server: customServer ?? server.url,
         port: port,
         timeout: timeout,
       );
+    }
+
+    final offset = _cachedOffset;
+    if (offset == null) {
       return isUtc ? nowLocal.toUtc() : nowLocal;
     }
 
-    if (nowLocal.difference(_lastSyncTime!) > _syncInterval) {
-      _triggerBackgroundSync(
-        server: customServer ?? server.url,
-        port: port,
-        timeout: timeout,
-      );
-    }
-
-    final corrected = nowLocal.add(_cachedOffset!);
+    final corrected = nowLocal.add(offset);
     return isUtc ? corrected.toUtc() : corrected.toLocal();
   }
 
@@ -184,8 +251,26 @@ class AccurateTime {
   /// Returns the current accurate time as an ISO 8601 string.
   ///
   /// [isUtc] defaults to `true` (UTC).
-  static Future<String> nowToIsoString({bool isUtc = true}) =>
-      now(isUtc: isUtc).then((time) => time.toIso8601String());
+  static Future<String> nowToIsoString({
+    bool isUtc = true,
+    NtpServer server = NtpServer.google,
+    String? customServer,
+    int port = 123,
+    int timeout = 5,
+    bool forceRefresh = false,
+    bool allowFallback = true,
+  }) async {
+    final time = await now(
+      isUtc: isUtc,
+      server: server,
+      customServer: customServer,
+      port: port,
+      timeout: timeout,
+      forceRefresh: forceRefresh,
+      allowFallback: allowFallback,
+    );
+    return time.toIso8601String();
+  }
 
   /// Fetches the offset from the NTP server and updates the cache.
   ///
@@ -220,6 +305,8 @@ class AccurateTime {
     required int port,
     required int timeout,
   }) async {
+    final generation = _syncGeneration;
+
     try {
       final client = _createNtpClient(
         server: server,
@@ -228,12 +315,21 @@ class AccurateTime {
       );
       final serverTime = await client.now();
       final nowLocal = DateTime.now();
+
+      if (generation != _syncGeneration) {
+        return;
+      }
+
       _cachedOffset = serverTime.difference(nowLocal);
       _lastSyncTime = nowLocal;
+      _lastSyncElapsed = _stopwatch.elapsed;
+      _lastFailedAttempt = null;
+      _lastFailedElapsed = null;
     } catch (e) {
-      if (_cachedOffset == null) {
-        _cachedOffset = Duration.zero;
-        _lastSyncTime = DateTime.now();
+      if (generation == _syncGeneration) {
+        _lastFailedAttempt = DateTime.now();
+        _lastFailedElapsed = _stopwatch.elapsed;
+        _cachedOffset ??= Duration.zero;
       }
       rethrow;
     }
@@ -249,8 +345,12 @@ class AccurateTime {
 
   /// Clears the cached NTP offset and synchronization time.
   static void clearCache() {
+    _syncGeneration++;
     _cachedOffset = null;
     _lastSyncTime = null;
+    _lastSyncElapsed = null;
+    _lastFailedAttempt = null;
+    _lastFailedElapsed = null;
     _ongoingSync = null;
   }
 }

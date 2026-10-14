@@ -20,9 +20,9 @@
 ### 🚀 Why choose ntp_dart?
 
 - **🛠 Cross-Platform:** Native UDP NTP on **Mobile/Desktop**, HTTP fallback on **Web**.
-- **⚡ Extremely Accurate:** High-precision **microsecond precision** parsing with Latency Compensation.
-- **🛡 Robust & Secure:** Randomizes packets to resist spoofing/replay attacks (RFC 5905 compliant), plus maximum offset sanity bounds.
-- **🔋 Efficient:** Offset-based cache minimizes network requests, recalculating dynamically from the hardware clock.
+- **⚡ Extremely Accurate:** High-precision **microsecond precision** integer math with Monotonic RTT Latency Compensation.
+- **🛡 Robust & Secure:** Full **RFC 5905 / RFC 4330** validation (Origin Timestamp anti-spoofing, Kiss-o'-Death detection, Leap Indicator & Stratum checks, Year 2036 Era 1 rollover) plus **Monotonic Clock Anti-Tamper** detection.
+- **🔋 Efficient:** Offset-based cache with offline retry cooldowns minimizes network requests while recovering automatically when connectivity returns.
 - **🌍 Flexible:** Curated `NtpServer` enum (Google, Cloudflare, Apple, etc.), custom web API support, custom sync intervals, and optional grace fallbacks.
 
 ---
@@ -41,7 +41,7 @@ Add the dependency to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  ntp_dart: ^1.3.1
+  ntp_dart: ^1.4.0
 ```
 
 Run installation:
@@ -150,13 +150,17 @@ Singleton helper for caching and synchronization.
 
 | Method / Getter | Description |
 |:-------|:------------|
-| `now({bool isUtc = false, NtpServer server, String? customServer, bool forceRefresh = false, bool allowFallback = true})` | Returns `Future<DateTime>`. Syncs if cache is stale or force-refreshed. |
-| `nowSync({bool isUtc = false, NtpServer server, String? customServer})` | Returns `DateTime`. Background syncs if stale. |
-| `nowToIsoString({bool isUtc = true})` | Returns ISO 8601 string. |
-| `setSyncInterval(Duration)` | Sets the duration before the next network sync is required. |
-| `clearCache()` | Clears the cached offset. |
+| `now({bool isUtc = false, NtpServer server, String? customServer, int port = 123, int timeout = 5, bool forceRefresh = false, bool allowFallback = true})` | Returns `Future<DateTime>`. Syncs if cache is stale, tampered with, or force-refreshed. |
+| `nowSync({bool isUtc = false, NtpServer server, String? customServer, int port = 123, int timeout = 5})` | Returns `DateTime` immediately. Triggers background sync if stale. |
+| `nowToIsoString({bool isUtc = true, NtpServer server, String? customServer, int port = 123, int timeout = 5, bool forceRefresh = false, bool allowFallback = true})` | Returns accurate time formatted as an ISO 8601 string. |
+| `setSyncInterval(Duration)` | Sets the duration before the next network sync is required (default 60m). |
+| `setRetryCooldown(Duration)` | Sets cooldown period before retrying after a failed sync (default 15s). |
+| `clearCache()` | Clears the cached offset and invalidates any in-flight sync. |
 | `cachedOffset` | Getter for `Duration?` offset currently cached. |
 | `lastSyncTime` | Getter for `DateTime?` local time of last successful sync. |
+| `lastFailedAttempt` | Getter for `DateTime?` local time of last failed sync attempt. |
+| `syncInterval` | Getter for `Duration` resynchronization interval. |
+| `retryCooldown` | Getter for `Duration` retry cooldown duration. |
 
 ---
 

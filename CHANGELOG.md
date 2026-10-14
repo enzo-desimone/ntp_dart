@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.4.0
+- **Web Local Time & Timeout Consistency**: Fixed `isUtc: false` returning UTC instead of local `DateTime` in `ntp_web.dart` and unified timeout errors to throw `TimeoutException` across all platforms.
+- **High-Performance & Zero-Lag Architecture**:
+  - **Zero Post-Completion Lag (`ntp_io.dart`)**: Computed final `DateTime` *after* asynchronous socket/stream cleanup (`await subscription.cancel()`, `socket.close()`), eliminating microtask and cleanup delay bias from the measured offset.
+  - **Pure 64-bit Integer Timestamp Arithmetic**: Replaced floating-point timestamp conversions with exact rounded 64-bit integer math in `writeNtpTimestamp` and `parseNtpTimestamps`, avoiding intermediate `DateTime` heap allocations on the UDP receive hot path.
+  - **Monotonic RTT & Pre-compiled Web Parsers**: Used monotonic `Stopwatch` for UDP and HTTP round-trip measurements, bypassed DNS lookup via `InternetAddress.tryParse` when `server` is already an IP literal, and pre-compiled `Uri` and `DateFormat` instances in `ntp_web.dart`.
+- **Monotonic Clock & Anti-Tamper Protection (`AccurateTime`)**:
+  - Paired wall-clock checks with a monotonic `Stopwatch` to detect forward or backward system clock tampering (`> 2s` divergence between wall-clock and monotonic elapsed time) and immediately force resynchronization.
+- **Cache Poisoning & Offline Resilience**: Fixed issue where initial network failure would lock in a `Duration.zero` offset for `syncInterval` (60m). Introduced configurable `retryCooldown` (default 15s) and ensured `lastSyncTime` only updates on successful synchronizations.
+- **RFC 5905 & RFC 4330 Protocol Compliance**:
+  - Implemented Origin Timestamp validation against client request Transmit Timestamp to reject spoofed, delayed, or cross-talk packets.
+  - Added Leap Indicator check (`LI == 3`) and Stratum validation (`Stratum > 15`), plus Kiss-o'-Death (KoD) detection (`Stratum == 0`) with zero-copy rejection code parsing (e.g. `RATE`, `DENY`).
+  - Added Year 2036 NTP Era 1 rollover handling in timestamp parsing and SNTP compatibility when `Receive Timestamp (T2)` is omitted.
+- **UDP Socket Buffer Draining & Concurrency**:
+  - Drained all queued UDP datagrams per `RawSocketEvent.read` in a `while` loop so truncated or spoofed packets in the OS buffer do not stall valid responses behind them.
+  - Resolved race condition where duplicate datagrams could throw `Bad state: Future already completed`.
+  - Added generation counter in `AccurateTime.clearCache()` to discard in-flight network responses and prevent stale cache resurrection.
+- **Strict Analyzer & Expanded Test Suite**: Enabled `strict-casts`, `strict-inference`, and `strict-raw-types` in `analysis_options.yaml`, exported `NtpBase`, and expanded the test suite to 37 unit tests.
+
 ## 1.3.2
 - **Documentation & Showcase**: Added package screenshot metadata in `pubspec.yaml` for pub.dev preview.
 

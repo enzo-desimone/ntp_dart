@@ -32,27 +32,21 @@ class NtpClient extends NtpBase {
 
   static final _random = Random.secure();
 
-  /// Retrieves the current UTC [DateTime] from the configured NTP server.
+  static const int _ntpEpochOffset =
+      2208988800; // Seconds between 1900 and 1970
+
+  /// Retrieves the current [DateTime] from the configured NTP server.
   ///
   /// Opens a UDP socket, sends a standard 48-byte NTP request packet,
-  /// waits for a response, and parses the server's transmit timestamp
-  /// into a [DateTime] object.
+  /// waits for a response, and computes the clock offset using all four
+  /// timestamps with full microsecond precision.
   ///
   /// Throws an [Exception] if the hostname cannot be resolved, if the
   /// server does not respond within [timeout] seconds, or if the packet
-  /// format is invalid.
+  /// is rejected by RFC 5905 validation.
   @override
   Future<DateTime> now() async {
-    final List<InternetAddress> addresses;
-    try {
-      addresses = await InternetAddress.lookup(server);
-    } catch (e) {
-      throw Exception('Unable to resolve NTP server address: $e');
-    }
-    if (addresses.isEmpty) {
-      throw Exception('Unable to resolve NTP server address');
-    }
-    final ntpAddress = addresses.first;
+    final ntpAddress = await _resolveAddress();
 
     final bindAddress = ntpAddress.type == InternetAddressType.IPv6
         ? InternetAddress.anyIPv6
@@ -65,40 +59,93 @@ class NtpClient extends NtpBase {
       throw Exception('Could not bind UDP socket: $e');
     }
 
-    final completer = Completer<DateTime>();
+    final completer = Completer<int>();
     StreamSubscription<RawSocketEvent>? subscription;
+    final int offsetMicros;
 
     try {
+      final rttWatch = Stopwatch()..start();
       final originateTime = DateTime.now().toUtc();
-      final packet = _buildNtpPacket(originateTime);
-      socket.send(packet, ntpAddress, port);
+      final t1Micros = originateTime.microsecondsSinceEpoch;
+      final packet = buildNtpPacket(originateTime);
 
       subscription = socket.listen(
         (event) {
-          if (event == RawSocketEvent.read) {
+          if (event != RawSocketEvent.read) return;
+
+          // Drain all available datagrams in the OS socket buffer.
+          while (!completer.isCompleted) {
             final datagram = socket.receive();
-            if (datagram == null) return;
-            final destinationTime = DateTime.now().toUtc();
+            if (datagram == null) break;
+
+            final elapsedMicros = rttWatch.elapsedMicroseconds;
+            final data = datagram.data;
+            if (data.length < 48) continue; // Discard truncated packet
+
+            // RFC 5905: Validate Mode (4 = server, 5 = broadcast)
+            final mode = data[0] & 0x07;
+            if (mode != 4 && mode != 5) continue;
+
+            // RFC 5905: Validate Origin Timestamp matches request Transmit Timestamp
+            if (!matchesOriginTimestamp(data, packet)) {
+              continue; // Discard spoofed or delayed response
+            }
+
+            // RFC 5905: Check Stratum (0 is Kiss-o'-Death, >15 is unsynchronized)
+            final stratum = data[1];
+            if (stratum == 0) {
+              final code = String.fromCharCodes(data, 12, 16).trim();
+              completer.completeError(
+                Exception(
+                  "NTP server returned Kiss-o'-Death (KoD) code: $code",
+                ),
+              );
+              return;
+            }
+            if (stratum > 15) {
+              completer.completeError(
+                Exception('NTP server is unsynchronized (stratum: $stratum)'),
+              );
+              return;
+            }
+
+            // RFC 5905: Check Leap Indicator (LI == 3 means unsynchronized clock)
+            final leapIndicator = (data[0] >> 6) & 0x03;
+            if (leapIndicator == 3) {
+              completer.completeError(
+                Exception(
+                  'NTP server clock is unsynchronized (leap indicator: 3)',
+                ),
+              );
+              return;
+            }
 
             try {
-              final timestamps = _parseNtpTimestamps(datagram.data);
-              final t2 = timestamps.receiveTimestamp;
-              final t3 = timestamps.transmitTimestamp;
-
-              final offsetMicros = ((t2.microsecondsSinceEpoch -
-                          originateTime.microsecondsSinceEpoch) +
-                      (t3.microsecondsSinceEpoch -
-                          destinationTime.microsecondsSinceEpoch)) ~/
-                  2;
-
-              final correctedTime =
-                  DateTime.now().add(Duration(microseconds: offsetMicros));
-
-              completer.complete(
-                isUtc ? correctedTime.toUtc() : correctedTime.toLocal(),
+              final byteData = ByteData.view(
+                data.buffer,
+                data.offsetInBytes,
+                data.lengthInBytes,
               );
+              final t3Micros = _parseTimestampMicros(byteData, 40);
+              if (t3Micros == 0) {
+                continue; // Discard if transmit timestamp is 0
+              }
+
+              final rawT2Micros = _parseTimestampMicros(byteData, 32);
+              // Fall back to T3 if server omitted Receive Timestamp (SNTP compatibility)
+              final t2Micros = rawT2Micros == 0 ? t3Micros : rawT2Micros;
+              final t4Micros = t1Micros + elapsedMicros;
+
+              final computedOffset =
+                  ((t2Micros - t1Micros) + (t3Micros - t4Micros)) ~/ 2;
+
+              completer.complete(computedOffset);
+              return;
             } catch (e, stack) {
-              completer.completeError(e, stack);
+              if (!completer.isCompleted) {
+                completer.completeError(e, stack);
+              }
+              return;
             }
           }
         },
@@ -116,7 +163,12 @@ class NtpClient extends NtpBase {
         },
       );
 
-      return await completer.future.timeout(
+      final sentBytes = socket.send(packet, ntpAddress, port);
+      if (sentBytes <= 0) {
+        throw Exception('Failed to send UDP packet to $server:$port');
+      }
+
+      offsetMicros = await completer.future.timeout(
         Duration(seconds: timeout),
         onTimeout: () {
           throw TimeoutException('Timeout while contacting the NTP server');
@@ -128,16 +180,48 @@ class NtpClient extends NtpBase {
       }
       socket.close();
     }
+
+    // Apply offset after all async cleanup has finished to prevent microtask/socket lag.
+    final correctedTime =
+        DateTime.now().add(Duration(microseconds: offsetMicros));
+    return isUtc ? correctedTime.toUtc() : correctedTime.toLocal();
+  }
+
+  /// Resolves [server] to an [InternetAddress], bypassing DNS lookup if [server]
+  /// is already an IPv4 or IPv6 literal.
+  Future<InternetAddress> _resolveAddress() async {
+    final parsedIp = InternetAddress.tryParse(server);
+    if (parsedIp != null) {
+      return parsedIp;
+    }
+
+    final List<InternetAddress> addresses;
+    try {
+      addresses = await InternetAddress.lookup(server).timeout(
+        Duration(seconds: timeout),
+        onTimeout: () =>
+            throw TimeoutException('DNS lookup timeout for $server'),
+      );
+    } catch (e) {
+      throw Exception('Unable to resolve NTP server address: $e');
+    }
+    if (addresses.isEmpty) {
+      throw Exception('Unable to resolve NTP server address');
+    }
+    return addresses.firstWhere(
+      (a) => a.type == InternetAddressType.IPv4,
+      orElse: () => addresses.first,
+    );
   }
 
   /// Builds a 48-byte NTP request packet according to the protocol specification (RFC 5905).
-  Uint8List _buildNtpPacket(DateTime originateTime) {
+  static Uint8List buildNtpPacket(DateTime originateTime) {
     final packet = Uint8List(48);
     // LI = 0 (no warning), VN = 3 (version 3), Mode = 3 (client)
     packet[0] = 0x1B;
 
     final byteData = ByteData.view(packet.buffer);
-    _writeNtpTimestamp(byteData, 40, originateTime);
+    writeNtpTimestamp(byteData, 40, originateTime);
 
     // RFC 5905 recommends randomizing the last byte of the transmit timestamp
     // to prevent off-path spoofing attacks.
@@ -146,28 +230,67 @@ class NtpClient extends NtpBase {
     return packet;
   }
 
-  /// Writes an NTP 64-bit timestamp into [data] starting at [offset].
-  void _writeNtpTimestamp(ByteData data, int offset, DateTime time) {
-    const ntpEpochOffset = 2208988800; // seconds between 1900 and 1970
+  /// Writes an NTP 64-bit timestamp into [data] starting at [offset] using
+  /// pure 64-bit integer arithmetic.
+  static void writeNtpTimestamp(ByteData data, int offset, DateTime time) {
     final microsSinceUnix = time.toUtc().microsecondsSinceEpoch;
     final secondsSinceUnix = microsSinceUnix ~/ 1000000;
     final microsRemainder = microsSinceUnix % 1000000;
 
-    final ntpSeconds = (secondsSinceUnix + ntpEpochOffset) & 0xFFFFFFFF;
+    final ntpSeconds = (secondsSinceUnix + _ntpEpochOffset) & 0xFFFFFFFF;
     final fractional =
-        ((microsRemainder / 1000000) * 0x100000000).round() & 0xFFFFFFFF;
+        (((microsRemainder * 0x100000000) + 500000) ~/ 1000000) & 0xFFFFFFFF;
 
     data.setUint32(offset, ntpSeconds);
     data.setUint32(offset + 4, fractional);
   }
 
-  /// Parses the NTP server's response and extracts the Receive (T2) and Transmit (T3) timestamps.
+  /// Verifies that the Origin Timestamp in the response (bytes 24-31) matches
+  /// the Transmit Timestamp sent in the request (bytes 40-47).
+  static bool matchesOriginTimestamp(Uint8List response, Uint8List request) {
+    if (response.length < 32 || request.length < 48) return false;
+    for (var i = 0; i < 8; i++) {
+      if (response[24 + i] != request[40 + i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// Extracts a 64-bit NTP timestamp at [offset] directly as microseconds
+  /// since Unix epoch using pure integer arithmetic and RFC 4330 Era 1 support.
+  static int _parseTimestampMicros(ByteData byteData, int offset) {
+    final ntpSeconds = byteData.getUint32(offset);
+    final fractional = byteData.getUint32(offset + 4);
+
+    if (ntpSeconds == 0 && fractional == 0) {
+      return 0;
+    }
+
+    final int unixSeconds;
+    if (ntpSeconds >= _ntpEpochOffset) {
+      // Era 0 (1970 - 2036)
+      unixSeconds = ntpSeconds - _ntpEpochOffset;
+    } else {
+      // Era 1 (2036 - 2172) per RFC 4330 / RFC 5905
+      unixSeconds = (ntpSeconds + 0x100000000) - _ntpEpochOffset;
+    }
+
+    final micros = ((fractional * 1000000) + 0x80000000) ~/ 0x100000000;
+    return unixSeconds * 1000000 + micros;
+  }
+
+  /// Parses the NTP server's response and extracts the Origin (T1), Receive (T2),
+  /// and Transmit (T3) timestamps, with RFC 4330 Era 1 (2036 rollover) support.
   ///
+  /// - T1: Origin Timestamp (bytes 24-31)
   /// - T2: Receive Timestamp (bytes 32-39)
   /// - T3: Transmit Timestamp (bytes 40-47)
-  ({DateTime receiveTimestamp, DateTime transmitTimestamp}) _parseNtpTimestamps(
-    Uint8List data,
-  ) {
+  static ({
+    DateTime originTimestamp,
+    DateTime receiveTimestamp,
+    DateTime transmitTimestamp,
+  }) parseNtpTimestamps(Uint8List data) {
     if (data.length < 48) {
       throw Exception(
         'Malformed NTP response packet: length is ${data.length}',
@@ -176,28 +299,19 @@ class NtpClient extends NtpBase {
     final byteData =
         ByteData.view(data.buffer, data.offsetInBytes, data.lengthInBytes);
 
-    // Helper to parse a 64-bit NTP timestamp with microsecond precision
-    DateTime parseTimestamp(int offset) {
-      final ntpSeconds = byteData.getUint32(offset);
-      final fractional = byteData.getUint32(offset + 4);
-
-      if (ntpSeconds == 0 && fractional == 0) {
-        return DateTime.fromMicrosecondsSinceEpoch(0, isUtc: true);
-      }
-
-      const ntpEpochOffset = 2208988800;
-      final unixSeconds = ntpSeconds - ntpEpochOffset;
-      final micros = (fractional / 0x100000000 * 1000000).round();
-
-      return DateTime.fromMicrosecondsSinceEpoch(
-        unixSeconds * 1000000 + micros,
-        isUtc: true,
-      );
-    }
-
     return (
-      receiveTimestamp: parseTimestamp(32),
-      transmitTimestamp: parseTimestamp(40),
+      originTimestamp: DateTime.fromMicrosecondsSinceEpoch(
+        _parseTimestampMicros(byteData, 24),
+        isUtc: true,
+      ),
+      receiveTimestamp: DateTime.fromMicrosecondsSinceEpoch(
+        _parseTimestampMicros(byteData, 32),
+        isUtc: true,
+      ),
+      transmitTimestamp: DateTime.fromMicrosecondsSinceEpoch(
+        _parseTimestampMicros(byteData, 40),
+        isUtc: true,
+      ),
     );
   }
 }

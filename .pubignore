@@ -1,8 +1,6 @@
-  .idea/.gitignore
-  .idea/caches/deviceStreaming.xml
-  .idea/libraries/Dart_Packages.xml
-  .idea/libraries/Dart_SDK.xml
-  .idea/misc.xml
-  .idea/modules.xml
-  .idea/vcs.xml
-  ntp_dart.iml
+.idea/
+.vscode/
+.dart_tool/
+build/
+*.iml
+pubspec.lock
