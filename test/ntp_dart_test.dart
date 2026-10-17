@@ -43,30 +43,13 @@ Uint8List createMockNtpResponse({
   return response;
 }
 
-class FakeNtpClient implements NtpClient {
-  FakeNtpClient({required this.nowMock});
+class FakeNtpClient extends NtpBase implements NtpClient {
+  FakeNtpClient({required this.nowMock, super.server = 'fake.server'})
+      : super(isUtc: true);
   final Future<DateTime> Function() nowMock;
 
   @override
   Future<DateTime> now() => nowMock();
-
-  @override
-  String get server => 'fake.server';
-
-  @override
-  int get port => 123;
-
-  @override
-  int get timeout => 5;
-
-  @override
-  String? get apiUrl => null;
-
-  @override
-  DateTime Function(http.Response)? get parseResponse => null;
-
-  @override
-  bool get isUtc => true;
 }
 
 void main() {
@@ -829,9 +812,14 @@ void main() {
               spoofOrigin: true,
             );
             server.send(spoofed, datagram.address, datagram.port);
-            // 3. Send valid packet immediately in the same burst
+            // 3. Send valid packet immediately (and retry if OS non-blocking send buffer was busy)
             final valid = createMockNtpResponse(requestPacket: datagram.data);
-            server.send(valid, datagram.address, datagram.port);
+            final sent = server.send(valid, datagram.address, datagram.port);
+            if (sent == 0) {
+              Future<void>.delayed(const Duration(milliseconds: 5), () {
+                server.send(valid, datagram.address, datagram.port);
+              });
+            }
           }
         }
       });
@@ -961,6 +949,248 @@ void main() {
           ),
         );
       }, () => MockClient((_) async => http.Response('Internal Error', 500)));
+    });
+
+    test(
+        'parseWebDateString supports Cloudflare trace, ISO-8601, and Date header',
+        () {
+      // Cloudflare trace format with sub-second precision
+      final cf = web.NtpClient.parseWebDateString(
+        'fl=29f12\nts=1760428800.125\nip=1.1.1.1',
+      );
+      expect(cf, DateTime.utc(2025, 10, 14, 8, 0, 0, 125));
+
+      // ISO-8601 format
+      final iso = web.NtpClient.parseWebDateString('2026-10-14T08:00:00.500Z');
+      expect(iso, DateTime.utc(2026, 10, 14, 8, 0, 0, 500));
+
+      // HTTP Date header fallback when body is empty or non-date
+      final headerTime = web.NtpClient.parseWebDateString(
+        'ok',
+        dateHeader: 'Wed, 14 Oct 2026 08:00:00 GMT',
+      );
+      expect(headerTime, DateTime.utc(2026, 10, 14, 8, 0, 0));
+    });
+  });
+
+  group('NtpResponse Telemetry, Multi-Sample & Advanced AccurateTime', () {
+    setUp(() {
+      AccurateTime.clearCache();
+      AccurateTime.setRetryCooldown(const Duration(seconds: 15));
+    });
+
+    tearDown(() {
+      AccurateTime.ntpClientFactory = null;
+      AccurateTime.clearCache();
+    });
+
+    test('NtpClient.query() returns full RFC 5905 NtpResponse telemetry',
+        () async {
+      late RawDatagramSocket server;
+      server = await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final serverPort = server.port;
+
+      server.listen((event) {
+        if (event == RawSocketEvent.read) {
+          final datagram = server.receive();
+          if (datagram != null) {
+            final res = createMockNtpResponse(
+              requestPacket: datagram.data,
+              stratum: 1,
+              leapIndicator: 0,
+              referenceId: 'GOOG',
+            );
+            server.send(res, datagram.address, datagram.port);
+          }
+        }
+      });
+
+      addTearDown(() => server.close());
+
+      final client = NtpClient(
+        server: '127.0.0.1',
+        port: serverPort,
+        timeout: 2,
+        isUtc: true,
+      );
+
+      final response = await client.query();
+      expect(response.dateTime.isUtc, isTrue);
+      expect(response.stratum, 1);
+      expect(response.leapIndicator, 0);
+      expect(response.referenceId, 'GOOG');
+      expect(response.server, '127.0.0.1');
+      expect(response.roundTripDelay.inMicroseconds, greaterThanOrEqualTo(0));
+      expect(response.toString(), contains('stratum: 1'));
+    });
+
+    test(
+        'NtpClient.query(samples: 3) selects lowest RTT sample and tolerates partial packet loss',
+        () async {
+      late RawDatagramSocket server;
+      server = await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final serverPort = server.port;
+      var packetCount = 0;
+
+      server.listen((event) {
+        if (event == RawSocketEvent.read) {
+          final datagram = server.receive();
+          if (datagram != null) {
+            packetCount++;
+            final delayMs = packetCount == 1 ? 40 : 2;
+            Future.delayed(Duration(milliseconds: delayMs), () {
+              final res = createMockNtpResponse(
+                requestPacket: datagram.data,
+                stratum: 2,
+                referenceId: '\x08\x08\x08\x08',
+              );
+              server.send(res, datagram.address, datagram.port);
+            });
+          }
+        }
+      });
+
+      addTearDown(() => server.close());
+
+      final client = NtpClient(
+        server: '127.0.0.1',
+        port: serverPort,
+        timeout: 2,
+        isUtc: true,
+      );
+
+      final response = await client.query(samples: 3);
+      expect(packetCount, 3);
+      expect(response.stratum, 2);
+      expect(response.referenceId, '8.8.8.8');
+      expect(response.roundTripDelay.inMilliseconds, lessThan(35));
+    });
+
+    test('AccurateTime.now() falls back to fallbackServers when primary fails',
+        () async {
+      final queriedServers = <String>[];
+      AccurateTime.ntpClientFactory = ({
+        server = 'pool.ntp.org',
+        port = 123,
+        timeout = 5,
+        isUtc = true,
+      }) {
+        return FakeNtpClient(
+          server: server,
+          nowMock: () async {
+            queriedServers.add(server);
+            if (server == NtpServer.google.url) {
+              throw TimeoutException('Primary server timed out');
+            }
+            return DateTime.now().toUtc().add(const Duration(seconds: 7));
+          },
+        );
+      };
+
+      final time = await AccurateTime.now(
+        server: NtpServer.google,
+        fallbackServers: [NtpServer.cloudflare, NtpServer.apple],
+        allowFallback: false,
+      );
+
+      expect(queriedServers, [NtpServer.google.url, NtpServer.cloudflare.url]);
+      expect(AccurateTime.cachedOffset!.inSeconds, closeTo(7, 1));
+      expect(AccurateTime.lastSyncDetails?.server, NtpServer.cloudflare.url);
+      expect(time, isNotNull);
+    });
+
+    test('AccurateTime.query() returns cached NtpResponse telemetry', () async {
+      AccurateTime.ntpClientFactory = ({
+        server = 'pool.ntp.org',
+        port = 123,
+        timeout = 5,
+        isUtc = true,
+      }) {
+        return FakeNtpClient(
+          server: server,
+          nowMock: () async =>
+              DateTime.now().toUtc().add(const Duration(seconds: 3)),
+        );
+      };
+
+      final response = await AccurateTime.query(isUtc: true);
+      expect(response.offset.inSeconds, closeTo(3, 1));
+      expect(response.dateTime.isUtc, isTrue);
+      expect(AccurateTime.lastSyncDetails, isNotNull);
+    });
+
+    test('AccurateTime.restoreCache() hydrates offset for offline startup', () {
+      AccurateTime.restoreCache(offset: const Duration(seconds: 42));
+      expect(AccurateTime.cachedOffset, const Duration(seconds: 42));
+      expect(AccurateTime.lastSyncDetails?.referenceId, 'CACH');
+      expect(AccurateTime.isTampered, isFalse);
+
+      final syncNow = AccurateTime.nowSync(isUtc: true);
+      expect(
+        syncNow.difference(DateTime.now().toUtc()).inSeconds,
+        closeTo(42, 1),
+      );
+    });
+
+    test(
+        'AccurateTime.isTampered and onClockTampered detect manual clock jumps',
+        () async {
+      final tamperEvents = <Duration>[];
+      final sub = AccurateTime.onClockTampered.listen(tamperEvents.add);
+      addTearDown(sub.cancel);
+
+      // Simulate a sync that happened 10 minutes ago on wall-clock,
+      // while monotonic stopwatch just recorded now (10m clock jump!)
+      AccurateTime.restoreCache(
+        offset: const Duration(seconds: 1),
+        syncTime: DateTime.now().subtract(const Duration(minutes: 10)),
+      );
+
+      expect(AccurateTime.isTampered, isTrue);
+
+      AccurateTime.ntpClientFactory = ({
+        server = 'pool.ntp.org',
+        port = 123,
+        timeout = 5,
+        isUtc = true,
+      }) {
+        return FakeNtpClient(
+          nowMock: () async => DateTime.now().toUtc(),
+        );
+      };
+
+      // Calling now() detects tamper, emits onClockTampered, and re-syncs
+      await AccurateTime.now();
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(tamperEvents, isNotEmpty);
+      expect(AccurateTime.isTampered, isFalse);
+    });
+
+    test('AccurateTime.stream() emits accurate periodic ticks', () async {
+      AccurateTime.ntpClientFactory = ({
+        server = 'pool.ntp.org',
+        port = 123,
+        timeout = 5,
+        isUtc = true,
+      }) {
+        return FakeNtpClient(
+          nowMock: () async =>
+              DateTime.now().toUtc().add(const Duration(seconds: 5)),
+        );
+      };
+
+      final ticks = await AccurateTime.stream(
+        interval: const Duration(milliseconds: 20),
+        isUtc: true,
+      ).take(3).toList();
+
+      expect(ticks.length, 3);
+      for (final tick in ticks) {
+        expect(tick.isUtc, isTrue);
+        expect(
+            tick.difference(DateTime.now().toUtc()).inSeconds, closeTo(5, 1));
+      }
     });
   });
 }

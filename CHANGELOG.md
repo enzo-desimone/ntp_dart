@@ -1,6 +1,14 @@
 # Changelog
 
+## 1.5.0
+- **Full NTP Telemetry (`NtpResponse`)**: Call `NtpClient().query()` or `AccurateTime.query()` to inspect `offset`, `roundTripDelay`, `stratum`, `leapIndicator`, `referenceId`, `rootDelay`, and `rootDispersion`.
+- **Multi-Sample Filtering & Server Fallbacks**: Pass `samples: 3` to select the lowest-RTT packet and `fallbackServers: [...]` to automatically failover if the primary server is unreachable.
+- **Live Clock Stream & Tamper Detection**: Listen to `AccurateTime.stream()` for periodic accurate ticks and `AccurateTime.onClockTampered` (or `AccurateTime.isTampered`) to detect manual system clock changes.
+- **Offline Cache Restore**: Call `AccurateTime.restoreCache(offset: ...)` on startup to hydrate a saved offset before network sync.
+- **Zero-Conflict Web Parser**: Removed `intl` dependency and added built-in support for RFC 1123, Cloudflare Trace (`ts=`), ISO-8601, and HTTP `Date` headers.
+
 ## 1.4.0
+
 - **Web Local Time & Timeout Consistency**: Fixed `isUtc: false` returning UTC instead of local `DateTime` in `ntp_web.dart` and unified timeout errors to throw `TimeoutException` across all platforms.
 - **High-Performance & Zero-Lag Architecture**:
   - **Zero Post-Completion Lag (`ntp_io.dart`)**: Computed final `DateTime` *after* asynchronous socket/stream cleanup (`await subscription.cancel()`, `socket.close()`), eliminating microtask and cleanup delay bias from the measured offset.

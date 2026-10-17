@@ -60,14 +60,17 @@ Future<void> _runAccurateTimeDemo() async {
 Future<void> _runFlexibleConfigurationDemo() async {
   _printSection('3. Flexible Configurations & Fallbacks');
 
-  // Querying using the Cloudflare NTP Server from the NtpServer enum
-  print('Querying Cloudflare NTP server...');
+  // Querying using Cloudflare with 3-sample RTT filtering and full telemetry
+  print('Querying Cloudflare NTP server with 3-sample burst filter...');
   try {
-    final cloudflareTime = await AccurateTime.now(
+    final telemetry = await AccurateTime.query(
       server: NtpServer.cloudflare,
+      fallbackServers: [NtpServer.google, NtpServer.apple],
+      samples: 3,
       forceRefresh: true, // Bypasses the cache entirely
     );
-    print('✅ Cloudflare Time (Forced Refresh): $cloudflareTime');
+    print('✅ Cloudflare Time: ${telemetry.dateTime}');
+    print('📊 Telemetry:       $telemetry');
   } catch (e) {
     print('❌ Cloudflare Fetch Error: $e');
   }

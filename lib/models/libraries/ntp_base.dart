@@ -4,11 +4,13 @@
 /// interface for retrieving the current UTC time from an NTP source.
 /// Concrete implementations (e.g., for mobile/desktop using UDP sockets,
 /// or for web using HTTP APIs) should extend this class and provide the
-/// platform-specific logic in the [now] method.
+/// platform-specific logic in the [NtpBase.now] method.
 library;
 
 import 'package:http/http.dart' as http;
+import 'package:ntp_dart/models/ntp_response.dart';
 
+/// Abstract base class for NTP client implementations across platforms.
 abstract class NtpBase {
   /// Creates a new [NtpBase] instance with optional configuration parameters.
   ///
@@ -61,9 +63,28 @@ abstract class NtpBase {
   /// Defaults to `false` (Local Time).
   final bool isUtc;
 
-  /// Retrieves the current UTC [DateTime] from the configured NTP source.
+  /// Retrieves the current [DateTime] from the configured NTP source.
   ///
   /// This method must be implemented by concrete subclasses to perform the
   /// actual network request and parse the server response.
   Future<DateTime> now();
+
+  /// Queries the configured NTP source and returns a full [NtpResponse]
+  /// containing telemetry such as clock offset, round-trip delay, and stratum.
+  ///
+  /// When [samples] > 1, performs multi-sample clock filtering (RFC 5905)
+  /// and returns the sample with the lowest round-trip delay.
+  Future<NtpResponse> query({int samples = 1}) async {
+    assert(samples >= 1, 'samples must be at least 1.');
+    final watch = Stopwatch()..start();
+    final serverTime = await now();
+    final rtt = watch.elapsed;
+    final nowLocal = DateTime.now();
+    return NtpResponse(
+      dateTime: isUtc ? serverTime.toUtc() : serverTime.toLocal(),
+      offset: serverTime.difference(nowLocal),
+      roundTripDelay: rtt,
+      server: apiUrl ?? server,
+    );
+  }
 }
