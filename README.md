@@ -8,8 +8,9 @@
 
 [![Pub Version](https://img.shields.io/pub/v/ntp_dart?style=flat-square&logo=dart&color=0175C2)](https://pub.dev/packages/ntp_dart)
 [![Pub Likes](https://img.shields.io/pub/likes/ntp_dart?style=flat-square&logo=flutter&color=02569B)](https://pub.dev/packages/ntp_dart)
-[![Pub Points](https://img.shields.io/pub/points/ntp_dart?style=flat-square&logo=dart&color=0175C2)](https://pub.dev/packages/ntp_dart)
-[![License](https://img.shields.io/github/license/enzo-desimone/ntp_dart/blob/master/LICENSE)
+[![Pub Points](https://img.shields.io/pub/points/ntp_dart?style=flat-square&logo=dart&color=0175C2)](https://pub.dev/packages/ntp_dart/score)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](https://pub.dev/packages/ntp_dart/license)
+
 
 </div>
 
@@ -42,7 +43,7 @@ Add the dependency to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  ntp_dart: ^1.5.0
+  ntp_dart: ^1.5.1
 ```
 
 Run installation:

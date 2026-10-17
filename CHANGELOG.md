@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.5.1
+- Fixed License badge markdown link syntax in `README.md`.
+
 ## 1.5.0
 - **Full NTP Telemetry (`NtpResponse`)**: Call `NtpClient().query()` or `AccurateTime.query()` to inspect `offset`, `roundTripDelay`, `stratum`, `leapIndicator`, `referenceId`, `rootDelay`, and `rootDispersion`.
 - **Multi-Sample Filtering & Server Fallbacks**: Pass `samples: 3` to select the lowest-RTT packet and `fallbackServers: [...]` to automatically failover if the primary server is unreachable.

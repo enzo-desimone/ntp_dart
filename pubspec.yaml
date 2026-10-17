@@ -1,6 +1,6 @@
 name: ntp_dart
 description: A lightweight, cross-platform NTP client for Dart & Flutter. Fetches highly accurate time via native UDP and Web HTTP fallbacks with microsecond precision and secure caching.
-version: 1.5.0
+version: 1.5.1
 homepage: https://github.com/enzo-desimone/ntp_dart
 repository: https://github.com/enzo-desimone/ntp_dart
 issue_tracker: https://github.com/enzo-desimone/ntp_dart/issues
